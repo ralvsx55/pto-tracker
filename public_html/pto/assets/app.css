@@ -116,6 +116,8 @@ main.wrap { padding-top: 1.25rem; padding-bottom: 2rem; }
 .grouptabs a { padding: .6rem .9rem; border-bottom: 3px solid transparent; color: var(--muted); font-weight: 600; }
 .grouptabs a:hover { text-decoration: none; color: var(--text); }
 .grouptabs a.active { color: var(--primary); border-bottom-color: var(--primary); }
+.grouptabs a.livelink { margin-left: auto; color: var(--primary); font-weight: 500; }
+.grouptabs a.livelink:hover { text-decoration: underline; }
 
 /* flashes */
 .flash { padding: .6rem .9rem; border-radius: var(--radius); margin-bottom: 1rem; border: 1px solid transparent; }

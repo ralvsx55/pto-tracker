@@ -66,6 +66,9 @@ function layout_header(string $title, array $opts = []): void
                 echo '<a' . $active . ' href="' . h(app_url($current === '' ? 'dashboard.php' : $current) . '?g=' . rawurlencode($g['group_key'])) . '">'
                     . h($g['name']) . '</a>';
             }
+            // Quick link to the group's live viewer page (what staff see), opened in a new tab so the admin keeps their place.
+            echo '<a class="livelink" target="_blank" rel="noopener" href="' . h(app_url('view.php') . '?g=' . rawurlencode($cur['group_key'])) . '">'
+                . 'Open live page: ' . h($cur['name']) . ' &#8599;</a>';
             echo '</div></div>';
         }
     }
