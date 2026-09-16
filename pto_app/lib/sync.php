@@ -1140,6 +1140,59 @@ function sync_delete_remote(string $calKey, string $googleEventId): bool
 }
 
 /**
+ * Delete EVERY unmanaged event (no lsp property, see sync_unmanaged()) of a calendar with the same explicit-write
+ * path sync_delete_remote() uses (404 = done). Managed events are never touched. Per-event failures are counted
+ * and the loop continues. One audit_log 'sync' row and one sync.log line carry the counts. Refuses (nothing
+ * deleted) when explicit writes are not allowed or the calendar has no Google calendar id.
+ * Returns ['deleted'=>int,'failed'=>int,'skipped'=>int,'message'=>string].
+ */
+function sync_delete_unmanaged_all(string $calKey): array
+{
+    $cal = sync_calendar_row($calKey);
+    $res = ['deleted' => 0, 'failed' => 0, 'skipped' => 0, 'message' => ''];
+    $calId = (string) ($cal['google_calendar_id'] ?? '');
+    if ($calId === '') {
+        $res['message'] = 'refused: no Google calendar id configured';
+        sync_log("$calKey delete-unmanaged-all " . $res['message']);
+        return $res;
+    }
+    if (!google_writes_allowed(true)) {
+        $res['message'] = 'refused: Google writes are not allowed in this environment';
+        sync_log("$calKey delete-unmanaged-all " . $res['message']);
+        return $res;
+    }
+    $unmanaged = sync_unmanaged($calKey);
+    $errors = [];
+    foreach ($unmanaged as $ev) {
+        $id = (string) ($ev['id'] ?? '');
+        if ($id === '') {
+            $res['skipped']++;
+            continue;
+        }
+        try {
+            google_delete_event($calId, $id, true);
+            $res['deleted']++;
+        } catch (Throwable $e) {
+            $res['failed']++;
+            $errors[] = $id . ': ' . $e->getMessage();
+            continue;
+        }
+        // An unmanaged event carries no lsp key, so no row should hold its id; clear a stale one all the same.
+        foreach (['time_off', 'events', 'birthday_events'] as $t) {
+            q("UPDATE `$t` SET google_event_id = NULL, synced_fingerprint = NULL WHERE google_event_id = ?", [$id]);
+        }
+    }
+    $res['message'] = sprintf('deleted %d of %d unmanaged event(s)', $res['deleted'], count($unmanaged))
+        . ($res['failed'] > 0 ? ', ' . $res['failed'] . ' failed: ' . implode('; ', array_slice($errors, 0, 3)) : '')
+        . ($res['skipped'] > 0 ? ', ' . $res['skipped'] . ' skipped' : '');
+    audit('sync', 'calendars', null, null, (int) $cal['group_id'], null,
+        ['deleted' => $res['deleted'], 'failed' => $res['failed'], 'skipped' => $res['skipped'], 'listed' => count($unmanaged)],
+        "$calKey: deleted all unmanaged calendar events (explicit): " . $res['message']);
+    sync_log(sprintf('%s delete-unmanaged-all listed=%d deleted=%d failed=%d skipped=%d', $calKey, count($unmanaged), $res['deleted'], $res['failed'], $res['skipped']));
+    return $res;
+}
+
+/**
  * SPEC 14.3: delete EVERY event on a birthday calendar, top the rows up, insert Y and Y+1 for active employees.
  * Explicit write. Returns ['deleted','inserted','failed','remote_count','would_insert','message','refused','committed'].
  */

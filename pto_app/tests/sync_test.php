@@ -505,6 +505,54 @@ $r = sync_calendar('us_sales', 'reconcile', ['trigger' => 'test']);
 eq([count($r['plan']['inserts']), count($r['plan']['patches']), count($r['plan']['unmanaged']), count($r['plan']['orphaned'])], [0, 0, 0, 0], 'us_sales fully consistent after adoption');
 
 // =========================================================================================================
+echo "7b. delete all unmanaged events\n";
+$managedBefore = $G->count($usSales);
+check($managedBefore >= 2, 'us_sales has managed events to protect', (string) $managedBefore);
+$junkA = $G->add($usSales, 'Old script copy A', '2026-05-01', '2026-05-02');
+$junkB = $G->add($usSales, 'Old script copy B', '2026-05-03', '2026-05-04');
+$junkC = $G->add($usSales, 'Old script copy C', '2026-05-05', '2026-05-06');
+eq(count(sync_unmanaged('us_sales')), 3, 'three unmanaged events listed');
+// refused locally (explicit writes off): nothing deleted, no audit row
+$GLOBALS['config']['environment'] = 'local';
+$auditBefore = (int) col('SELECT COUNT(*) FROM audit_log WHERE action = ?', ['sync']);
+$d = sync_delete_unmanaged_all('us_sales');
+eq([$d['deleted'], $d['failed'], $d['skipped']], [0, 0, 0], 'refused locally: counts zero');
+check(str_starts_with($d['message'], 'refused'), 'refused locally: message', $d['message']);
+eq($G->count($usSales), $managedBefore + 3, 'refused locally: nothing deleted');
+eq((int) col('SELECT COUNT(*) FROM audit_log WHERE action = ?', ['sync']), $auditBefore, 'refused locally: no audit row');
+$GLOBALS['config']['environment'] = 'production';
+// refused without a calendar id
+$savedCalId = calid('us_sales');
+update_row('calendars', ['google_calendar_id' => null], 'cal_key = ?', ['us_sales']);
+$d = sync_delete_unmanaged_all('us_sales');
+check(str_starts_with($d['message'], 'refused') && str_contains($d['message'], 'calendar id'), 'refused without a calendar id', $d['message']);
+eq($G->count($usSales), $managedBefore + 3, 'refused without id: nothing deleted');
+update_row('calendars', ['google_calendar_id' => $savedCalId], 'cal_key = ?', ['us_sales']);
+// one per-event failure (500 on B) does not stop the others; 404 counts as done
+$G->fail = static function (string $m, string $u) use ($junkB): ?array {
+    return $m === 'DELETE' && str_contains($u, rawurlencode($junkB)) ? [500, ['error' => ['code' => 500, 'message' => 'boom']]] : null;
+};
+$logBefore = count(sync_log_tail(1000));
+$d = sync_delete_unmanaged_all('us_sales');
+$G->fail = null;
+eq([$d['deleted'], $d['failed'], $d['skipped']], [2, 1, 0], 'A and C deleted, B failed, loop continued');
+eq([isset($G->cals[$usSales][$junkA]), isset($G->cals[$usSales][$junkB]), isset($G->cals[$usSales][$junkC])], [false, true, false], 'only B remains');
+eq($G->count($usSales), $managedBefore + 1, 'managed events untouched');
+eq(count(sync_log_tail(1000)) - $logBefore, 1, 'one sync.log line per run');
+$lastLine = (string) (sync_log_tail(1)[0] ?? '');
+check(str_contains($lastLine, 'us_sales delete-unmanaged-all listed=3 deleted=2 failed=1 skipped=0'), 'sync.log line carries the counts', $lastLine);
+eq((int) col('SELECT COUNT(*) FROM audit_log WHERE action = ? AND summary LIKE ?', ['sync', '%deleted all unmanaged%']), 1, 'one audit row with the counts');
+$aj = json_decode((string) col('SELECT after_json FROM audit_log WHERE action = ? AND summary LIKE ? ORDER BY id DESC LIMIT 1', ['sync', '%deleted all unmanaged%']), true);
+eq([$aj['deleted'] ?? null, $aj['failed'] ?? null, $aj['listed'] ?? null], [2, 1, 3], 'audit after_json counts');
+// second run finishes the job
+$d = sync_delete_unmanaged_all('us_sales');
+eq([$d['deleted'], $d['failed']], [1, 0], 'retry deletes the remaining one');
+eq(sync_unmanaged('us_sales'), [], 'no unmanaged events left');
+eq($G->count($usSales), $managedBefore, 'managed events all still there');
+$r = sync_calendar('us_sales', 'reconcile', ['trigger' => 'test']);
+eq([count($r['plan']['inserts']), count($r['plan']['patches']), count($r['plan']['deletes']), count($r['plan']['unmanaged']), count($r['plan']['orphaned'])], [0, 0, 0, 0, 0], 'us_sales still fully consistent');
+
+// =========================================================================================================
 echo "8. guards: empty desired set, delete guard (20% and 25), force\n";
 // Manila's only active employee with a birthday is Myra: blank it so nothing is eligible (Old Timer is departed)
 update_row('employees', ['birth_month' => null, 'birth_day' => null], 'id = ?', [$E['myra']]);

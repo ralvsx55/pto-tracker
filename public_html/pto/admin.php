@@ -1023,6 +1023,22 @@ function admin_post_sync_unmanaged(): never
     admin_sync_redirect((string) $c['cal_key']);
 }
 
+/** Delete every unmanaged event of the calendar (explicit write; the engine audits and logs the counts). */
+function admin_post_sync_delete_unmanaged_all(): never
+{
+    admin_require_google();
+    $c = admin_sync_calendar();
+    $key = (string) $c['cal_key'];
+    $r = sync_delete_unmanaged_all($key);
+    $refused = str_starts_with($r['message'], 'refused');
+    if (!$refused) {
+        // Re-list so the card shows what is left (per-event failures stay listed).
+        admin_sync_stash_set($key, 'unmanaged', admin_list_trim(sync_unmanaged($key), ADMIN_REMOTE_SHOW));
+    }
+    flash($refused || $r['failed'] > 0 ? 'err' : 'ok', $c['label'] . ($refused ? ' delete all unmanaged ' : ': ') . $r['message'] . ($r['failed'] > 0 ? ' (see sync.log)' : '') . '.');
+    admin_sync_redirect($key);
+}
+
 function admin_post_sync_wipe(): never
 {
     admin_require_google();
@@ -1136,6 +1152,9 @@ if (is_post()) {
             break;
         case 'sync_unmanaged':
             admin_post_sync_unmanaged();
+            break;
+        case 'sync_delete_unmanaged_all':
+            admin_post_sync_delete_unmanaged_all();
             break;
         case 'sync_wipe':
             admin_post_sync_wipe();
@@ -1490,6 +1509,7 @@ function admin_render_sync_card(array $c, array $groups, bool $configured, strin
         echo '<details class="sync-block" open><summary>Unmanaged events <span class="badge">' . h((string) $un['count']) . '</span>'
             . ($un['count'] > count($un['items']) ? ' <span class="muted">first ' . h((string) count($un['items'])) . ' shown</span>' : '') . ' <span class="muted">' . h(fmt_datetime($un['at'])) . '</span></summary>';
         echo '<p class="help">Events on the Google calendar without an lsp key (typed by hand or left from the old scripts). The sync reports them and leaves them alone.</p>';
+        echo '<p class="help">Unmanaged = events on Google that no app row is linked to (typically the old Apps Script\'s copies). After Adopt has linked what it can, delete the rest here.</p>';
         $items = [];
         foreach ($un['items'] as $it) {
             if (is_array($it)) {
@@ -1497,6 +1517,12 @@ function admin_render_sync_card(array $c, array $groups, bool $configured, strin
             }
         }
         admin_render_remote_events($c, $items, 'unm-' . $key, admin_unlinked_rows($c), $enabled);
+        $unCount = (int) $un['count'];
+        if ($unCount > 0) {
+            echo '<div class="actions">' . admin_sync_button('sync_delete_unmanaged_all', $hid, 'Delete ALL ' . $unCount . ' unmanaged events', 'btn-danger',
+                'Delete ALL ' . $unCount . ' unmanaged events from the Google calendar ' . $c['label'] . '? Every event with no linked app row is removed from Google. This cannot be undone.', $why)
+                . '<span class="help">Deletes every unmanaged event as listed now, not only the first ' . ADMIN_REMOTE_SHOW . ' shown.</span></div>';
+        }
         echo '</details>';
     }
     $adopt = admin_sync_stash_get($key, 'adopt');
