@@ -22,7 +22,7 @@ $me = require_role('admin');
 
 const ADMIN_TABS = ['users' => 'Users', 'groups' => 'Groups', 'calendars' => 'Calendars', 'import' => 'Import', 'selftest' => 'Self-test'];
 const ADMIN_MIN_TEMP_PASSWORD = 8;      // a typed temporary password; the user must replace it at first login
-const ADMIN_MIN_VIEWER_PASSWORD = 11;   // SPEC section 8: a shared 12+ character password
+const ADMIN_MIN_VIEWER_PASSWORD = 11;   // SPEC section 8: a shared 11+ character password
 const ADMIN_MAX_UPLOAD = 8 * 1024 * 1024;
 const ADMIN_EMBED_PREFIX = 'https://calendar.google.com/';   // the only frame-src the CSP allows
 

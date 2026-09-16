@@ -383,7 +383,7 @@ group sees only theirs.
 - Validation: signature, group, version equals the group's current `viewer_password_version`, not expired. Changing the
   password bumps the version and logs everyone out of that page.
 - The password form has no username. Failures sleep 1 second and are written to `audit_log` as `viewer_login_failed`
-  with IP. No lockout (a shared 12+ character password on an unlinked URL).
+  with IP. No lockout (a shared 11+ character password on an unlinked URL).
 - Admin sessions do not unlock viewer pages and vice versa (a master admin who is not trusted on the device types the
   viewer password once, like everyone else).
 
