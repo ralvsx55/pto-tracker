@@ -6,3 +6,4 @@ pto_data/
 *.log
 Thumbs.db
 .DS_Store
+deploy/
