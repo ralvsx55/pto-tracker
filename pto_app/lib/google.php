@@ -4,7 +4,8 @@ declare(strict_types=1);
 /**
  * Google Calendar API v3 client for a service account (SPEC section 14.1).
  *
- * - Credentials: PTO_DATA/google-service-account.json (test override: $GLOBALS['google_service_account'] array).
+ * - Credentials: PTO_DATA/google-service-account.json (test overrides: $GLOBALS['google_key_path'] for the file
+ *   location, $GLOBALS['google_service_account'] for the decoded array).
  * - Token: RS256 JWT signed with openssl_sign, exchanged at oauth2.googleapis.com/token, cached in settings
  *   (google_token_cache / google_token_expires_at) for 55 minutes.
  * - Transport is swappable: $GLOBALS['google_transport'] = callable(method, url, headers[], ?body): [status, jsonBody].
@@ -29,9 +30,13 @@ class GoogleApiError extends RuntimeException
     }
 }
 
-/** Where the service-account key file lives. */
+/** Where the service-account key file lives. $GLOBALS['google_key_path'] overrides it (tests only). */
 function google_key_path(): string
 {
+    $override = $GLOBALS['google_key_path'] ?? null;
+    if (is_string($override) && $override !== '') {
+        return $override;
+    }
     return PTO_DATA . '/google-service-account.json';
 }
 

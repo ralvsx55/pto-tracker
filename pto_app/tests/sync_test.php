@@ -7,8 +7,9 @@ declare(strict_types=1);
  *
  * Creates the scratch database pto_local_synctest from migrations/001_init.sql, inserts its own fixtures
  * (two groups, a few employees incl. one departed and one Feb-29 birthday, requests, events), points db() at it,
- * installs an in-memory fake Calendar API as $GLOBALS['google_transport'] and a generated RSA key as the service
- * account, sets environment 'production' + sync_mode 'live' for the write paths, and drops the database at the end.
+ * installs an in-memory fake Calendar API as $GLOBALS['google_transport'] and a generated RSA key written to a
+ * throwaway key file ($GLOBALS['google_key_path'], so the developer's real pto_data key is never read), sets
+ * environment 'production' + sync_mode 'live' for the write paths, and drops the database at the end.
  */
 
 require_once __DIR__ . '/../lib/bootstrap.php';
@@ -65,7 +66,11 @@ if ($pk === false) {
 }
 $pem = '';
 openssl_pkey_export($pk, $pem, null, $keyOpts);
-$GLOBALS['google_service_account'] = ['client_email' => 'pto-sync@test-project.iam.gserviceaccount.com', 'private_key' => $pem];
+// The throwaway key goes into a temp file and google_key_path() is pointed at it: the real pto_data key is never touched.
+$keyFile = $tmp . '/google-service-account.json';
+file_put_contents($keyFile, json_encode(['type' => 'service_account', 'client_email' => 'pto-sync@test-project.iam.gserviceaccount.com', 'private_key' => $pem], JSON_THROW_ON_ERROR));
+$missingKeyFile = $tmp . '/no-such-key.json';
+$GLOBALS['google_key_path'] = $keyFile;
 
 apply_sql_file(PTO_APP . '/migrations/001_init.sql');
 setting_set('sync_mode', 'live');
@@ -270,7 +275,8 @@ $Y = (int) group_today($US)->format('Y');
 // =========================================================================================================
 echo "1. google.php client, guard, token, helpers\n";
 $st = google_status();
-eq($st['key_file'], true, 'status: key file present (override)');
+eq($st['key_path'], $keyFile, 'status: key path follows the test override');
+eq($st['key_file'], true, 'status: throwaway key file present');
 eq($st['client_email'], 'pto-sync@test-project.iam.gserviceaccount.com', 'status: client_email');
 eq($st['token_ok'], true, 'status: token obtained');
 eq($G->tokens, 1, 'one token exchange');
@@ -328,8 +334,26 @@ $r = sync_calendar('us_holidays', 'reconcile', ['trigger' => 'test']);
 eq($r['executed']['inserts'] ?? null, 1, 'events calendar insert');
 eq($G->byLsp($usHol, 'event:' . $EV[1])['summary'] ?? null, 'Christmas Break', 'event title as typed');
 
+// sync_desired() tops up the birthday rows itself, so the "empty desired set" guard only fires when NO active employee
+// of the group has a month/day: blank them out, run, then restore.
+$bdays = rows('SELECT id, birth_month, birth_day FROM employees WHERE group_id = 1 AND birth_month IS NOT NULL');
+q('UPDATE employees SET birth_month = NULL, birth_day = NULL WHERE group_id = 1');
 $r = sync_calendar('us_birthdays', 'reconcile', ['trigger' => 'test']);
-check($r['aborted'] !== null && str_contains($r['aborted'], 'empty'), 'birthdays: empty desired set aborts (guard)', (string) $r['aborted']);
+check($r['aborted'] !== null && str_contains($r['aborted'], 'empty'), 'birthdays: empty desired set aborts when no active employee has a birthday (guard)', (string) $r['aborted']);
+eq((int) col('SELECT COUNT(*) FROM birthday_events'), 0, 'the aborted run created no birthday rows');
+eq((int) cal('us_birthdays')['last_sync_ok'], 0, 'birthday abort recorded as a failed run');
+foreach ($bdays as $b) {
+    update_row('employees', ['birth_month' => (int) $b['birth_month'], 'birth_day' => (int) $b['birth_day']], 'id = ?', [$b['id']]);
+}
+// first Preview with eligible employees: the rows are created on the fly and Y + Y+1 inserts are planned, no abort
+$r = sync_calendar('us_birthdays', 'reconcile', ['dry_run' => true, 'trigger' => 'test']);
+eq([$r['aborted'], count($r['plan']['inserts']), $r['executed']], [null, 6, []], 'first preview plans Y and Y+1 inserts without waiting for the nightly top-up');
+eq((int) col('SELECT COUNT(*) FROM birthday_events'), 6, 'preview created the 6 birthday rows');
+eq(birthday_rows_topup(1), 0, 'top-up is idempotent after the preview');
+// the explicit nightly top-up, from a clean slate
+q('DELETE FROM birthday_events');
+update_row('calendars', ['dirty' => 0], 'cal_key = ?', ['us_birthdays']);
+setting_set('dirty_since_us_birthdays', null);
 eq(birthday_rows_topup(1), 6, 'top-up adds Y and Y+1 for the 3 US employees with a birthday');
 eq(birthday_rows_topup(1), 0, 'top-up is idempotent');
 eq((int) cal('us_birthdays')['dirty'], 1, 'top-up marks the birthday calendar dirty');
@@ -482,9 +506,13 @@ eq([count($r['plan']['inserts']), count($r['plan']['patches']), count($r['plan']
 
 // =========================================================================================================
 echo "8. guards: empty desired set, delete guard (20% and 25), force\n";
+// Manila's only active employee with a birthday is Myra: blank it so nothing is eligible (Old Timer is departed)
+update_row('employees', ['birth_month' => null, 'birth_day' => null], 'id = ?', [$E['myra']]);
 $r = sync_calendar('mn_birthdays', 'reconcile', ['trigger' => 'test']);
-check($r['aborted'] !== null && str_contains($r['aborted'], 'empty'), 'mn_birthdays: empty set aborts', (string) $r['aborted']);
+check($r['aborted'] !== null && str_contains($r['aborted'], 'empty'), 'mn_birthdays: empty set aborts (no eligible employee)', (string) $r['aborted']);
 eq((int) cal('mn_birthdays')['last_sync_ok'], 0, 'abort recorded as a failed run');
+eq((int) col('SELECT COUNT(*) FROM birthday_events b JOIN employees e ON e.id = b.employee_id WHERE e.group_id = 2'), 0, 'no Manila birthday rows created by the abort');
+update_row('employees', ['birth_month' => 12, 'birth_day' => 25], 'id = ?', [$E['myra']]);
 // us_holidays has 1 mirrored row: 2 audited deletes are an ordinary edit (below the floor of 3) and go through;
 // 3 deletes = 300% -> abort; force -> executes
 $g1 = $G->add($usHol, 'Gone 1', '2025-01-01', '2025-01-02', 'event:9001');
@@ -715,8 +743,9 @@ setting_set('dirty_since_us_holidays', null);
 setting_set('sync_mode', 'dry_run');
 eq(sync_status_for_group(1)['state'], 'dry_run', 'status: dry_run');
 setting_set('sync_mode', 'live');
-$saved = $GLOBALS['google_service_account'];
-unset($GLOBALS['google_service_account']);
+// point the key path at a file that does not exist (never at the developer's real pto_data key)
+$GLOBALS['google_key_path'] = $missingKeyFile;
+eq(google_status(false)['key_file'], false, 'status: missing key file reported');
 eq(sync_status_for_group(1)['state'], 'not_configured', 'status: not configured without a key file');
 eq(sync_dirty_inline(2), '', 'inline hook with nothing dirty in group 2');
 mark_dirty('mn_pto');
@@ -726,7 +755,7 @@ eq([$r['ok'], count($r['plan']['inserts'])], [true, 1], 'preview without a key f
 check(str_contains($r['message'], 'not configured'), 'preview message says Google is not configured', $r['message']);
 $r = sync_calendar('mn_pto', 'incremental', ['trigger' => 'test']);
 check(!$r['ok'] && str_contains($r['message'], 'not configured'), 'a live run without a key file fails cleanly', $r['message']);
-$GLOBALS['google_service_account'] = $saved;
+$GLOBALS['google_key_path'] = $keyFile;
 $s = sync_status_for_group(2);
 eq($s['state'], 'failed', 'group 2: the aborted mn_birthdays run shows as failed', $s['summary']);
 // test connection: probe inserted and deleted, count unchanged
@@ -800,6 +829,7 @@ foreach (['cron/sync.php', 'cron/nightly.php', 'tools/sync_cli.php'] as $f) {
 $server->exec('DROP DATABASE IF EXISTS `' . TEST_DB . '`');
 @unlink($GLOBALS['sync_log_file']);
 @unlink($GLOBALS['alert_log_file']);
+@unlink($keyFile);
 @rmdir($tmp);
 
 if ($fail === 0) {
