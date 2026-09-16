@@ -70,10 +70,10 @@ if (is_post() && $dbOk) {
         $vMn = (string) post('viewer_manila', '');
         if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $name === '') {
             $err = 'Enter a valid email and a display name.';
-        } elseif (strlen($pw) < 12 || $pw !== $pw2) {
-            $err = 'The admin password needs 12+ characters and must be typed twice the same.';
-        } elseif (strlen($vUs) < 12 || strlen($vMn) < 12) {
-            $err = 'Both viewer passwords need 12+ characters.';
+        } elseif (strlen($pw) < 11 || $pw !== $pw2) {
+            $err = 'The admin password needs 11+ characters and must be typed twice the same.';
+        } elseif (strlen($vUs) < 11 || strlen($vMn) < 11) {
+            $err = 'Both viewer passwords need 11+ characters.';
         } else {
             tx(static function () use ($email, $name, $pw, $vUs, $vMn): void {
                 $id = user_create($email, $name, $pw, 'admin', null, false);
@@ -107,10 +107,10 @@ if ($dbOk && !$schemaPresent) {
     echo '<form method="post" data-autofocus-first>' . csrf_field() . '<input type="hidden" name="token" value="' . h($token) . '"><input type="hidden" name="action" value="admin">';
     echo '<div class="form-row"><div><label for="email">Admin email</label><input type="email" id="email" name="email" value="' . h((string) post('email', '')) . '" required></div>';
     echo '<div><label for="display_name">Display name</label><input type="text" id="display_name" name="display_name" value="' . h((string) post('display_name', '')) . '" required></div></div>';
-    echo '<div class="form-row"><div><label for="password">Admin password (12+)</label><input type="password" id="password" name="password" autocomplete="new-password" required minlength="12"></div>';
-    echo '<div><label for="password2">Repeat</label><input type="password" id="password2" name="password2" autocomplete="new-password" required minlength="12"></div></div>';
-    echo '<div class="form-row"><div><label for="viewer_us">Viewer password: Lightsaber Promotions (12+)</label><input type="password" id="viewer_us" name="viewer_us" autocomplete="off" required minlength="12"></div>';
-    echo '<div><label for="viewer_manila">Viewer password: Bright Bird Design (12+)</label><input type="password" id="viewer_manila" name="viewer_manila" autocomplete="off" required minlength="12"></div></div>';
+    echo '<div class="form-row"><div><label for="password">Admin password (11+)</label><input type="password" id="password" name="password" autocomplete="new-password" required minlength="11"></div>';
+    echo '<div><label for="password2">Repeat</label><input type="password" id="password2" name="password2" autocomplete="new-password" required minlength="11"></div></div>';
+    echo '<div class="form-row"><div><label for="viewer_us">Viewer password: Lightsaber Promotions (11+)</label><input type="password" id="viewer_us" name="viewer_us" autocomplete="off" required minlength="11"></div>';
+    echo '<div><label for="viewer_manila">Viewer password: Bright Bird Design (11+)</label><input type="password" id="viewer_manila" name="viewer_manila" autocomplete="off" required minlength="11"></div></div>';
     echo '<div class="actions"><button class="btn btn-primary" type="submit">Create admin</button></div></form>';
 } elseif ($schemaPresent) {
     echo '<div class="flash flash-ok">Setup is complete: ' . h((string) $userCount) . ' user account(s) exist.</div>';

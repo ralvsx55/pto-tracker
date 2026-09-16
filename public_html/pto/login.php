@@ -11,8 +11,8 @@ if ($user !== null && (int) $user['must_change_password'] === 1) {
     if (is_post() && post('action') === 'change') {
         $new = (string) post('password', '');
         $again = (string) post('password2', '');
-        if (strlen($new) < 12) {
-            $error = 'Use at least 12 characters.';
+        if (strlen($new) < 11) {
+            $error = 'Use at least 11 characters.';
         } elseif ($new !== $again) {
             $error = 'The two passwords do not match.';
         } else {
@@ -26,13 +26,13 @@ if ($user !== null && (int) $user['must_change_password'] === 1) {
     }
     layout_header('Change password', ['nav' => false]);
     echo '<div class="card narrow"><h1>Choose a new password</h1>';
-    echo '<p class="help">Your account was created with a temporary password. Pick a new one (12+ characters) to continue.</p>';
+    echo '<p class="help">Your account was created with a temporary password. Pick a new one (11+ characters) to continue.</p>';
     if ($error !== null) {
         echo '<div class="flash flash-err">' . h($error) . '</div>';
     }
     echo '<form method="post" data-autofocus-first>' . csrf_field() . '<input type="hidden" name="action" value="change">';
-    echo '<label for="password">New password</label><input type="password" id="password" name="password" autocomplete="new-password" required minlength="12">';
-    echo '<label for="password2">Repeat it</label><input type="password" id="password2" name="password2" autocomplete="new-password" required minlength="12">';
+    echo '<label for="password">New password</label><input type="password" id="password" name="password" autocomplete="new-password" required minlength="11">';
+    echo '<label for="password2">Repeat it</label><input type="password" id="password2" name="password2" autocomplete="new-password" required minlength="11">';
     echo '<div class="actions"><button class="btn btn-primary" type="submit">Save password</button>'
         . '<a class="btn" href="' . h(app_url('logout.php')) . '">Log out</a></div></form></div>';
     layout_footer();
