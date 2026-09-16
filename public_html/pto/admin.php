@@ -7,7 +7,7 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
  *   users      accounts: add with a temporary password (must_change_password), role (Master admin / Admin), group
  *              limit, deactivate/reactivate
  *   groups     per group: the "require the office password" switch (settings viewer_public_<key>, SPEC section 8),
- *              viewer password (viewer_set_password() bumps the trust-cookie version), holidays_excluded_from,
+ *              viewer password (viewer_set_password() bumps the trust-cookie version),
  *              viewer title/heading, calendar embed URL
  *   calendars  Google setup status, the global sync_mode switch, the ten calendar rows (Google calendar id, active/sync
  *              toggles) and per calendar the Milestone 2 sync actions (test, preview, sync now, force, adopt, unmanaged /
@@ -229,7 +229,8 @@ function admin_env_checks(): array
         return $checks;
     }
     $schema = setting('schema_version', '?') ?? '?';
-    $checks[] = [$schema === '1', 'schema_version ' . $schema];
+    $checks[] = [$schema === SCHEMA_VERSION, 'schema_version ' . $schema . ' matches the code (' . SCHEMA_VERSION . ')'
+        . ($schema !== SCHEMA_VERSION ? ': paste the missing pto_app/migrations/*.sql into phpMyAdmin in order' : '')];
     $engine = setting('engine_version', '?') ?? '?';
     $checks[] = [$engine === ENGINE_VERSION, 'engine_version setting ' . $engine . ' matches the code (' . ENGINE_VERSION . ')'];
     $env = (string) config('environment', 'production');
@@ -366,11 +367,6 @@ function admin_post_group_save(): never
         admin_redirect('groups');
     }
     $errors = [];
-    $fromRaw = (string) post('holidays_excluded_from', '');
-    $from = $fromRaw === '' ? null : to_date($fromRaw);
-    if ($fromRaw !== '' && $from === null) {
-        $errors[] = 'Holidays excluded from: enter a date (YYYY-MM-DD) or leave it blank to switch the rule off.';
-    }
     $title = (string) post('viewer_title', '');
     $heading = (string) post('viewer_heading', '');
     $embed = (string) post('viewer_embed_src', '');
@@ -390,7 +386,6 @@ function admin_post_group_save(): never
         admin_redirect('groups');
     }
     $data = [
-        'holidays_excluded_from' => $from === null ? null : ymd($from),   // SPEC section 5; NULL = rule off
         'viewer_title'           => $title,
         'viewer_heading'         => $heading,
         'viewer_embed_src'       => $embed === '' ? null : $embed,
@@ -1242,8 +1237,6 @@ function admin_render_groups(): void
         echo '<div class="card"><h2>' . h($g['name']) . ' <span class="muted">(' . h($g['group_key']) . ', ' . h($g['timezone']) . ', policy ' . h($g['policy_key']) . ')</span></h2>';
         echo '<form method="post">' . csrf_field() . '<input type="hidden" name="action" value="group_save"><input type="hidden" name="id" value="' . $id . '">';
         echo '<div class="form-row">';
-        echo '<div><label for="' . $p . 'hef">Holidays excluded from</label><input type="date" id="' . $p . 'hef" name="holidays_excluded_from" value="' . h($g['holidays_excluded_from']) . '">'
-            . '<span class="help">Requests starting on or after this date skip company holidays. Blank = rule off. Older requests stay as the sheets charged them.</span></div>';
         echo '<div><label for="' . $p . 'title">Viewer page title</label><input type="text" id="' . $p . 'title" name="viewer_title" maxlength="80" required value="' . h($g['viewer_title']) . '"></div>';
         echo '<div><label for="' . $p . 'heading">Viewer page heading</label><input type="text" id="' . $p . 'heading" name="viewer_heading" maxlength="120" required value="' . h($g['viewer_heading']) . '"></div>';
         echo '</div>';
@@ -1685,7 +1678,7 @@ function admin_render_import(): void
     echo '</select></div>';
     echo '<div><label for="imp_file">Snapshot JSON</label><input type="file" id="imp_file" name="snapshot" accept=".json,application/json" required></div>';
     echo '<div><label for="imp_asof">As of (optional)</label><input type="date" id="imp_asof" name="as_of">'
-        . '<span class="help">Becomes holidays_excluded_from and selects tests/fixtures/expected_&lt;date&gt;.json for the balance check. Blank = the group\'s today.</span></div>';
+        . '<span class="help">Selects tests/fixtures/expected_&lt;date&gt;.json for the balance check. Blank = the group\'s today.</span></div>';
     echo '</div>';
     echo '<label class="check"><input type="checkbox" name="replace_all" value="1"> Replace all: first delete this group\'s employees, time off, adjustments, birthday events and events (the other group, users, calendars and settings are untouched)</label>';
     echo '<label class="check"><input type="checkbox" name="confirm_commit" value="1"> I understand that Commit changes the database (required for Commit)</label>';

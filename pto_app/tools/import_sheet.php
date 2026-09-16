@@ -62,22 +62,15 @@ function import_looks_like_factory_closing(string $title): bool
     return (bool) preg_match('/factor|chinese|festival|national day|labor day|tomb|dragon/i', $title);
 }
 
-/** Section 5: titles that mean "office closed, not charged"; parties, luncheons, sales and factory closings stay unflagged. */
-function import_is_holiday_title(string $title): bool
-{
-    if (import_looks_like_factory_closing($title)) {
-        return false;
-    }
-    return (bool) preg_match('/holiday|company break|office closed|christmas break/i', $title);
-}
-
 /**
  * Import one group's snapshot.
  * $json = the openpyxl dump {"<sheet name>": {"rows": [[...], ...]}}; first row = headers.
  * $opts: 'commit' => bool (default false = dry run), 'replace_all' => bool, 'as_of' => 'Y-m-d' (default: the
- *        group's today; becomes holidays_excluded_from), 'expected' => path to an expected_*.json for the balance
- *        check (default: tests/fixtures/expected_<as_of>.json when it exists).
- * Returns the report: ok, committed, counts, warnings, errors, flagged_holidays, misfiled, acceptance, lines.
+ *        group's today), 'expected' => path to an expected_*.json for the balance check (default:
+ *        tests/fixtures/expected_<as_of>.json when it exists).
+ * Returns the report: ok, committed, counts, warnings, errors, misfiled, acceptance, lines.
+ * Section 5 is retired: every event is imported with is_holiday = 0 and groups.holidays_excluded_from is left alone
+ * (NULL = the engine's dormant exclusion stays off).
  */
 function import_snapshot(int $groupId, array $json, array $opts = []): array
 {
@@ -97,8 +90,8 @@ function import_snapshot(int $groupId, array $json, array $opts = []): array
 
     $report = [
         'ok' => true, 'committed' => false, 'group' => $group['group_key'], 'as_of' => ymd($asOf),
-        'counts' => ['employees' => 0, 'time_off' => 0, 'adjustments' => 0, 'events' => [], 'holidays_flagged' => 0, 'misfiled' => 0],
-        'warnings' => [], 'errors' => [], 'flagged_holidays' => [], 'misfiled' => [],
+        'counts' => ['employees' => 0, 'time_off' => 0, 'adjustments' => 0, 'events' => [], 'misfiled' => 0],
+        'warnings' => [], 'errors' => [], 'misfiled' => [],
         'acceptance' => ['rows_checked' => 0, 'row_mismatches' => [], 'balances_checked' => 0, 'balance_mismatches' => [], 'expected_file' => $expectedPath],
         'lines' => [],
     ];
@@ -227,11 +220,7 @@ function import_snapshot(int $groupId, array $json, array $opts = []): array
             }
             // Rows on the factory sheet that are not factory closings were filed there by mistake in 2023.
             $misfiled = $calKey === $map['factory_cal'] && !import_looks_like_factory_closing($title);
-            // SPEC section 9: a "possibly misfiled" row is never is_holiday-flagged, even when its title reads
-            // like a holiday (the 2023 US office closures on the Manila sheet must not become Manila holidays).
-            $isHoliday = $misfiled ? false : import_is_holiday_title($title);
-            $events[$calKey][] = ['row' => $rowNo, 'title' => $title, 'start_date' => $start, 'end_date' => $end,
-                'is_holiday' => $isHoliday, 'misfiled' => $misfiled, 'holiday_title' => $misfiled && import_is_holiday_title($title)];
+            $events[$calKey][] = ['row' => $rowNo, 'title' => $title, 'start_date' => $start, 'end_date' => $end, 'misfiled' => $misfiled];
         }
     }
 
@@ -308,17 +297,13 @@ function import_snapshot(int $groupId, array $json, array $opts = []): array
             foreach ($list as $ev) {
                 $id = insert('events', [
                     'cal_key' => $calKey, 'title' => mb_substr($ev['title'], 0, 200), 'start_date' => $ev['start_date'],
-                    'end_date' => $ev['end_date'], 'is_holiday' => $ev['is_holiday'] ? 1 : 0, 'legacy_row' => $ev['row'],
+                    'end_date' => $ev['end_date'], 'is_holiday' => 0, 'legacy_row' => $ev['row'],
                     'created_at' => $now, 'updated_at' => $now,
                 ]);
                 $report['counts']['events'][$calKey]++;
                 $label = "$calKey: {$ev['title']} ({$ev['start_date']}..{$ev['end_date']})";
-                if ($ev['is_holiday']) {
-                    $report['flagged_holidays'][] = $label;
-                    $report['counts']['holidays_flagged']++;
-                }
                 if ($ev['misfiled']) {
-                    $report['misfiled'][] = $label . ($ev['holiday_title'] ? ' [holiday-like title, NOT flagged as a company holiday]' : '');
+                    $report['misfiled'][] = $label;
                     $misfiledIds[] = $id;
                     $report['counts']['misfiled']++;
                 }
@@ -334,9 +319,6 @@ function import_snapshot(int $groupId, array $json, array $opts = []): array
         }
         setting_set('misfiled_events', json_encode(array_values(array_unique(array_merge(array_map('intval', $prev), $misfiledIds)))));
 
-        // Section 5: the holiday rule applies from the import date; history stays as the sheets charged it.
-        update_row('groups', ['holidays_excluded_from' => ymd($asOf)], 'id = ?', [$groupId]);
-
         // --- acceptance check (SPEC section 4) -----------------------------------------------------
         import_acceptance($group, $requests, $idByName, $asOf, $expectedPath, $report);
         $mismatches = count($report['acceptance']['row_mismatches']) + count($report['acceptance']['balance_mismatches']);
@@ -345,9 +327,9 @@ function import_snapshot(int $groupId, array $json, array $opts = []): array
             $report['errors'][] = "Acceptance check failed with $mismatches mismatch(es); nothing was written.";
         }
 
-        $summaryTxt = sprintf('Imported %s snapshot: %d employees, %d time off, %d adjustments, %d events (%d holidays flagged, %d possibly misfiled)%s',
+        $summaryTxt = sprintf('Imported %s snapshot: %d employees, %d time off, %d adjustments, %d events (%d possibly misfiled)%s',
             $group['group_key'], $report['counts']['employees'], $report['counts']['time_off'], $report['counts']['adjustments'],
-            array_sum($report['counts']['events']), $report['counts']['holidays_flagged'], $report['counts']['misfiled'],
+            array_sum($report['counts']['events']), $report['counts']['misfiled'],
             $replaceAll ? ' [replace all]' : '');
         audit('import', null, null, null, $groupId, null, $report['counts'], $summaryTxt);
 
@@ -464,13 +446,10 @@ function import_finish(array $report): array
 {
     $l = &$report['lines'];
     $c = $report['counts'];
-    array_unshift($l, sprintf('Group %s, as of %s: %d employees, %d time-off rows, %d adjustments, events: %s; %d holiday-flagged, %d possibly misfiled.',
+    array_unshift($l, sprintf('Group %s, as of %s: %d employees, %d time-off rows, %d adjustments, events: %s; %d possibly misfiled.',
         $report['group'], $report['as_of'], $c['employees'], $c['time_off'], $c['adjustments'],
         $c['events'] === [] ? 'none' : implode(', ', array_map(static fn($k, $n) => "$k $n", array_keys($c['events']), $c['events'])),
-        $c['holidays_flagged'], $c['misfiled']));
-    foreach ($report['flagged_holidays'] as $f) {
-        $l[] = 'Holiday: ' . $f;
-    }
+        $c['misfiled']));
     foreach ($report['misfiled'] as $m) {
         $l[] = 'Possibly misfiled: ' . $m;
     }

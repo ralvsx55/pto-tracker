@@ -110,10 +110,14 @@ function group_holidays_reset(): void
     group_holidays(0);
 }
 
-/** groups.holidays_excluded_from as a date, or null when the rule is off. */
+/**
+ * groups.holidays_excluded_from as a date, or null when the rule is off. Section 5 is retired: nothing in the product
+ * sets the column any more (migration 002 nulled it), so this returns null and the engine charges plain weekdays.
+ */
 function group_holidays_from(array $group): ?DateTimeImmutable
 {
-    return to_date($group['holidays_excluded_from'] ?? null);
+    $raw = $group['holidays_excluded_from'] ?? null;
+    return $raw === null || $raw === '' ? null : to_date((string) $raw);
 }
 
 /** The group's calendars (optionally one kind: 'pto' | 'birthdays' | 'events'), sorted. */

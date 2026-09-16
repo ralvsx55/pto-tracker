@@ -10,8 +10,6 @@
 .ev-table input[type=date] { min-width: 9.5rem; }
 .ev-table .ev-add td, .ev-table .ev-edit td { background: var(--primary-soft); }
 .ev-table .ev-flagged td { background: var(--amber-bg); }
-.ev-table .ev-check { display: flex; gap: .4rem; align-items: flex-start; font-weight: 400; font-size: .88rem; margin: .2rem 0 0; }
-.ev-table .ev-check input { margin-top: .2rem; }
 .ev-table .ev-callabel { font-size: .8rem; margin: .4rem 0 .15rem; }
 .ev-table .ev-actions { white-space: nowrap; }
 .ev-table .ev-flag { margin-top: .35rem; }

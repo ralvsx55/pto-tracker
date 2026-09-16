@@ -91,11 +91,11 @@ $today = group_today($group);
 $rows = sheet_order(group_summaries((int) $group['id'], $today));
 
 view_header((string) $group['viewer_title']);
-echo '<div class="viewer"><h1>' . h($group['viewer_heading']) . '</h1>';
+echo '<div class="viewer">';
 echo '<div class="viewer-cols">';
 
 // Calendar column: the embed URL is kept verbatim from the old page (groups.viewer_embed_src).
-echo '<div class="viewer-cal">';
+echo '<div class="viewer-cal card-panel"><h1>' . h($group['viewer_heading']) . '</h1>';
 $embed = $group['viewer_embed_src'] ?? null;
 if (is_string($embed) && $embed !== '') {
     echo '<iframe src="' . h($embed) . '" title="' . h($group['name']) . ' calendar" width="100%" height="700" frameborder="0" scrolling="no"></iframe>';
@@ -106,7 +106,7 @@ echo '</div>';
 
 // Table column: the old pages' wording. US: "Remaining Days After Scheduling Time Off" Employee | Hire Date | PTO | VAC.
 // Manila: "Remaining Time Off" Employee | Hire Date | PTO (Current) with the small "After MM/DD/YYYY: N" line.
-echo '<div class="viewer-table">';
+echo '<div class="viewer-table card-panel">';
 echo '<h2>' . ($twoKinds ? 'Remaining Days After Scheduling Time Off' : 'Remaining Time Off') . '</h2>';
 // Sortable (app.js): hire date carries data-v Y-m-d, the balances their plain number.
 echo '<table class="sortable"><thead><tr><th data-sort="text">Employee</th><th data-sort="date">Hire Date</th>';
@@ -127,8 +127,7 @@ foreach ($rows as $row) {
     $cur = $s['current'];
     $next = $s['next'];
     echo '<tr><td>' . h($e['name']) . '</td>';
-    // Hire date with the "cycle renews MM/DD" hint under it.
-    echo '<td data-v="' . h((string) $e['hire_date']) . '">' . h(fmt_date($e['hire_date'])) . '<span class="renews">cycle renews ' . h($next['start']->format('m/d')) . '</span></td>';
+    echo '<td data-v="' . h((string) $e['hire_date']) . '">' . h(fmt_date($e['hire_date'])) . '</td>';
     if ($twoKinds) {
         foreach ($kinds as $k) {
             $left = $cur['remaining'][$k];
@@ -150,7 +149,7 @@ if ($shown === 0) {
     echo '<tr><td colspan="' . ($twoKinds ? 4 : 3) . '" class="muted">No employees.</td></tr>';
 }
 echo '</tbody></table>';
-echo '<p class="help">Balances as of ' . h($today->format('m/d/Y')) . '. Company holidays do not count against time off.</p>';
+echo '<p class="help">Balances as of ' . h($today->format('m/d/Y')) . '.</p>';
 echo '</div>';   // .viewer-table
 
 echo '</div></div>';   // .viewer-cols .viewer

@@ -12,12 +12,13 @@ page and the setup page, all on the library below.
    `C:\xampp\php\php.exe pto_app\tools\dev_reset.php`
    - writes `pto_data/config.php` from local defaults if it is missing (db `pto_local`, root, no password,
      base_url `http://127.0.0.1:8020/`, random secret and install token)
-   - drops and recreates `pto_local` from `migrations/001_init.sql`
+   - drops and recreates `pto_local` from every `migrations/NNN_*.sql` in order (`apply_migrations()` in `lib/db.php`),
+     so the local `schema_version` always matches the code's `SCHEMA_VERSION` (`lib/bootstrap.php`)
    - creates master admin `chris@lightsaberpromotions.com` / `changeme-now`, viewer passwords `staff` for both groups
      (the viewer pages are open until Admin > Groups ticks "Require the office password on the viewer page")
    - imports `tests/fixtures/us_snapshot_2026-09-14.json` and `manila_snapshot_2026-09-14.json` with
-     `as_of` = the snapshot date in the file name (so `holidays_excluded_from` and the acceptance check
-     against `expected_2026-09-14.json` are exact even when it is already tomorrow in Manila)
+     `as_of` = the snapshot date in the file name (so the acceptance check against `expected_2026-09-14.json`
+     is exact even when it is already tomorrow in Manila)
 3. `run-local.bat` (= `php -S 127.0.0.1:8020 -t public_html\pto`) and open http://127.0.0.1:8020/
 
 ## Tests and checks
@@ -52,14 +53,16 @@ the group's employees, time off, adjustments, birthday events and events first (
 groups, calendars, settings and audit_log untouched). Admin > Import (Screens phase) calls the same
 `import_snapshot(int $groupId, array $json, array $opts): array` and prints `$report['lines']`.
 
-Things the importer decides (SPEC section 9 and 5):
-- `is_holiday` = title matches `/holiday|company break|office closed|christmas break/i` and the row does not
-  look like a factory closing (`/factor|chinese|festival|national day|labor day|tomb|dragon/i`).
-- "Possibly misfiled" = a row on a Factory Closings sheet that does not look like a factory closing. The
-  events table has no flag column (schema is exact), so the flagged ids are kept in `settings.misfiled_events`
-  as a JSON list; the Events screen reads it and clears an id when the row is moved. "Keep here" on the Events
-  screen records the id in `settings.misfiled_dismissed` instead (both are JSON lists of `events.id`).
-  A misfiled row is never `is_holiday`-flagged, even when its title reads like a holiday (SPEC section 9).
+Things the importer decides (SPEC section 9):
+- "Possibly misfiled" = a row on a Factory Closings sheet that does not look like a factory closing
+  (`/factor|chinese|festival|national day|labor day|tomb|dragon/i`). The events table has no flag column (schema is
+  exact), so the flagged ids are kept in `settings.misfiled_events` as a JSON list; the Events screen reads it and
+  clears an id when the row is moved. "Keep here" on the Events screen records the id in `settings.misfiled_dismissed`
+  instead (both are JSON lists of `events.id`).
+- Company holidays are retired (SPEC section 5): every event is written with `is_holiday = 0` and
+  `groups.holidays_excluded_from` is never touched. Existing databases get `migrations/002_retire_holidays.sql`
+  (paste into phpMyAdmin), which zeroes the flags, nulls the dates and sets `schema_version` to 2; until then the
+  footer of every logged-in page and the Self-test say the schema is behind the code.
 - Manila `NEXT` adjustments are anchored to the start of the cycle after the one containing the sheet's
   effective date; `CURRENT` keeps the sheet's date. Birth years >= 2023 are placeholders and stored as NULL.
 - Auto-increment counters are not reset on replace-all (ALTER TABLE would commit the transaction in MariaDB).
@@ -71,13 +74,13 @@ Every page starts with `require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.ph
 
 | file | functions |
 |---|---|
-| bootstrap.php | `PTO_APP`, `PTO_DATA`, `APP_VERSION`, `PTO_CLI`; `config(string $key, $default=null)` (dotted keys), `config_loaded()`; timezone, error handling to `pto_data/logs/error.log` + friendly page, security headers, session (`lsp_pto`, 12 h idle), requires every lib file, `csrf_verify()` on POST |
+| bootstrap.php | `PTO_APP`, `PTO_DATA`, `APP_VERSION`, `SCHEMA_VERSION` (the `settings.schema_version` the code expects), `PTO_CLI`; `config(string $key, $default=null)` (dotted keys), `config_loaded()`; timezone, error handling to `pto_data/logs/error.log` + friendly page, security headers, session (`lsp_pto`, 12 h idle), requires every lib file, `csrf_verify()` on POST |
 | helpers.php | `h`, `redirect`, `flash`, `flashes`, `fmt_date`, `fmt_datetime`, `fmt_days`, `signed_days` ("+1.5"), `balance_class` (' neg' / ' low' / ''), `month_names`, `csv_text`, `csv_row` (the one fputcsv call), `app_url` (path-relative: works on any port), `app_abs_url`, `json_out`, `now_str`, `is_post`, `post`, `get`, `ymd`, `to_date`, `client_ip`, `plural` |
-| db.php | `db`, `q`, `row`, `rows`, `col`, `insert`, `update_row`, `tx`, `setting`, `setting_set`, `sql_statements`, `apply_sql_file` |
+| db.php | `db`, `q`, `row`, `rows`, `col`, `insert`, `update_row`, `tx`, `setting`, `setting_set`, `sql_statements`, `apply_sql_file`, `migration_files`, `apply_migrations` (every `migrations/NNN_*.sql` in order) |
 | auth.php | `current_user`, `require_login`, `require_role` ('admin' = master admin; `admin.php` and `history.php` demand it), `role_label` ('admin' -> "Master admin", 'editor' -> "Admin"; the only place the role wording lives), `login`, `logout`, `user_can_group`, `user_create` |
 | csrf.php | `csrf_token`, `csrf_field`, `csrf_verify` |
-| groups.php | `groups_all`, `group_by_id`, `group_by_key`, `current_group` (`?g=` > session > first allowed), `group_today`, `group_policy`, `group_kinds`, `group_holidays` (memoised per request), `group_holidays_reset` (call after an events write), `group_holidays_from`, `group_calendars` |
-| layout.php | `layout_header($title, ['nav'=>bool, 'group_tabs'=>bool, 'css'=>[], 'js'=>[], 'title_suffix'=>bool, 'body_class'=>string])`, `layout_footer()`, `layout_error_page($status, $title, $message, $backHref, $backLabel)` (403/404 pages), `layout_theme_toggle($extraClass)`; nav, group tabs, user/logout + sun/moon toggle, flashes, the "Lightsaber Promotions Inc. (c) <year>" footer (the version line is on Admin only). M2: `sync_badge_state(?$row)` ('synced'/'pending'/'error'/'' for the sortable `data-v`) and `sync_badge(?$row, $showError=false)` (the Calendar column badge; the one helper every screen uses) |
+| groups.php | `groups_all`, `group_by_id`, `group_by_key`, `current_group` (`?g=` > session > first allowed), `group_today`, `group_policy`, `group_kinds`, `group_holidays` (memoised per request; dormant, empty since SPEC section 5 was retired), `group_holidays_reset` (call after an events write), `group_holidays_from` (null = rule off), `group_calendars` |
+| layout.php | `layout_header($title, ['nav'=>bool, 'group_tabs'=>bool, 'css'=>[], 'js'=>[], 'title_suffix'=>bool, 'body_class'=>string])`, `layout_footer()` (appends `layout_schema_warning()`: a badge for logged-in users when `settings.schema_version` is behind `SCHEMA_VERSION`), `layout_error_page($status, $title, $message, $backHref, $backLabel)` (403/404 pages), `layout_theme_toggle($extraClass)`; nav, group tabs, user/logout + sun/moon toggle, flashes, the "Lightsaber Promotions Inc. (c) <year>" footer (the version line is on Admin only). M2: `sync_badge_state(?$row)` ('synced'/'pending'/'error'/'' for the sortable `data-v`) and `sync_badge(?$row, $showError=false)` (the Calendar column badge; the one helper every screen uses) |
 | audit.php | `audit($action, $table, $rowId, $employeeId, $groupId, $before, $after, $summary)` |
 | policy.php | `policy_for`, `policy_allotment`, `policy_kind_label` (pure) |
 | balance.php | `ENGINE_VERSION`, `cycle_start`, `cycle_end`, `next_cycle_start`, `years_of_service`, `working_days`, `request_working_dates`, `holidays_for_request`, `request_holidays_skipped`, `consumed_by_cycle`, `ledger`, `summary`, `after_note`, `engine_date`, `engine_num`, `engine_fmt` (pure: no DB, no clock) |
@@ -94,11 +97,11 @@ Engine shapes (all dates `DateTimeImmutable` at midnight; input rows are DB rows
   a request/adjustment touches (or the hire date) through the cycle after today's. Each cycle:
   `start, end (exclusive), yos, allotment[kind], adjustments[rows], adjusted[kind], used[kind], remaining[kind],
   is_current, is_next, is_future, requests[]`. Each request entry: `id, kind, start, end, note, days,
-  days_in_cycle, split, holidays_skipped[], remaining_after[kind], note_after` ("After MM/DD/YYYY: 3 PTO / 15 Vac"
+  days_in_cycle, split, holidays_skipped[] (always empty: section 5 retired), remaining_after[kind], note_after` ("After MM/DD/YYYY: 3 PTO / 15 Vac"
   or "After MM/DD/YYYY: 3" for future cycles). A Manila request that straddles the anniversary appears in both
   cycles with its `days_in_cycle`.
 - `summary()` returns `['current' => cycle, 'next' => cycle, 'after_date' => 'MM/DD/YYYY']`.
-- `request_preview()` returns `working_days, holidays_skipped, by_cycle, cycles, remaining_after, straddle,
+- `request_preview()` returns `working_days, holidays_skipped (always empty, never rendered), by_cycle, cycles, remaining_after, straddle,
   warnings[], summary_line` or `['error' => ...]` (422 from preview.php).
 
 Coding rules: `declare(strict_types=1)` everywhere, PDO prepared statements only, every output through `h()`,

@@ -18,7 +18,7 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
  * Upcoming items of the group from $today through the later of "next week" and "end of this month".
  * Weeks run Monday to Sunday. Returns ['buckets' => ['today'=>[], 'week'=>[], 'next'=>[], 'month'=>[]],
  * 'week_end', 'next_week_end', 'month_end'] where each item is
- * ['on' => first day on/after today, 'start', 'end', 'type' => 'timeoff'|'birthday'|'event', 'who', 'what', 'holiday'].
+ * ['on' => first day on/after today, 'start', 'end', 'type' => 'timeoff'|'birthday'|'event', 'who', 'what'].
  * A multi-day item is filed once, under the first bucket it touches (an ongoing vacation is under Today).
  */
 function dashboard_upcoming(array $group, DateTimeImmutable $today): array
@@ -42,11 +42,11 @@ function dashboard_upcoming(array $group, DateTimeImmutable $today): array
         if ($s === null || $e === null) {
             continue;
         }
-        // Same day count the engine charges (section 5: holidays skipped only from holidays_excluded_from).
+        // Same day count the engine charges (weekdays; the dormant section 5 exclusion is off with NULL holidays_excluded_from).
         $days = working_days($s, $e, holidays_for_request($t, $holidays, $from));
         $items[] = [
             'on' => $s < $today ? $today : $s, 'start' => $s, 'end' => $e, 'type' => 'timeoff', 'rank' => 0,
-            'who' => (string) $t['name'], 'what' => $t['kind'] . ', ' . plural($days, 'day'), 'holiday' => false,
+            'who' => (string) $t['name'], 'what' => $t['kind'] . ', ' . plural($days, 'day'),
         ];
     }
 
@@ -60,13 +60,13 @@ function dashboard_upcoming(array $group, DateTimeImmutable $today): array
             if ($d >= $today && $d <= $windowEnd) {
                 $items[] = [
                     'on' => $d, 'start' => $d, 'end' => $d, 'type' => 'birthday', 'rank' => 1,
-                    'who' => (string) $e['name'], 'what' => 'Birthday', 'holiday' => false,
+                    'who' => (string) $e['name'], 'what' => 'Birthday',
                 ];
             }
         }
     }
 
-    // Events on the group's events calendars (holidays, factory closings, sales, parties).
+    // Events on the group's events calendars (office closures, factory closings, sales, parties).
     $sql = 'SELECT ev.*, c.label AS cal_label FROM events ev JOIN calendars c ON c.cal_key = ev.cal_key
             WHERE c.group_id = ? AND ev.end_date >= ? AND ev.start_date <= ?
             ORDER BY ev.start_date, ev.id';
@@ -78,7 +78,7 @@ function dashboard_upcoming(array $group, DateTimeImmutable $today): array
         }
         $items[] = [
             'on' => $s < $today ? $today : $s, 'start' => $s, 'end' => $e, 'type' => 'event', 'rank' => 2,
-            'who' => (string) $ev['title'], 'what' => (string) $ev['cal_label'], 'holiday' => (int) $ev['is_holiday'] === 1,
+            'who' => (string) $ev['title'], 'what' => (string) $ev['cal_label'],
         ];
     }
 
@@ -122,8 +122,7 @@ function dashboard_bucket(string $title, string $range, array $items): void
         $when = '<span class="when">' . h(dashboard_when($it['start'], $it['end'])) . '</span>';
         $who = '<span class="who">' . h($it['who']) . '</span>';
         $what = '<span class="what">' . h($it['what']) . '</span>';
-        $badge = $it['holiday'] ? ' <span class="badge badge-ok">company holiday</span>' : '';
-        echo '<li class="up-' . h($it['type']) . '">' . $when . $who . ' ' . $what . $badge . '</li>';
+        echo '<li class="up-' . h($it['type']) . '">' . $when . $who . ' ' . $what . '</li>';
     }
     echo '</ul></div>';
 }

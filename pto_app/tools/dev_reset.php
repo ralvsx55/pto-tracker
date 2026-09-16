@@ -5,9 +5,9 @@ declare(strict_types=1);
  * Local reset (SPEC section 12). CLI only:
  *   C:/xampp/php/php.exe pto_app/tools/dev_reset.php
  * 1. writes pto_data/config.php from local defaults when it is missing
- * 2. drops and recreates the pto_local database from migrations/001_init.sql
+ * 2. drops and recreates the pto_local database from every migrations/NNN_*.sql in order
  * 3. creates admin chris@lightsaberpromotions.com / changeme-now, sets both viewer passwords to "staff"
- * 4. imports both fixture snapshots (holidays_excluded_from = today) and prints the reports
+ * 4. imports both fixture snapshots and prints the reports
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -53,9 +53,10 @@ $server->exec(sprintf('CREATE DATABASE `%s` CHARACTER SET utf8mb4 COLLATE utf8mb
 unset($server);
 echo "Database {$c['name']} recreated\n";
 
-// 2. schema + seeds
-$n = apply_sql_file(PTO_APP . '/migrations/001_init.sql');
-echo "Applied 001_init.sql ($n statements)\n";
+// 2. schema + seeds: every migration in order, so local always matches SCHEMA_VERSION
+foreach (apply_migrations() as $file => $n) {
+    echo "Applied $file ($n statements)\n";
+}
 
 // 3. admin + viewer passwords
 $adminId = user_create('chris@lightsaberpromotions.com', 'Chris Coleman', 'changeme-now', 'admin', null, false);
@@ -74,8 +75,8 @@ $allOk = true;
 foreach ($fixtures as $key => $file) {
     $g = group_by_key($key);
     $json = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-    // as_of = the snapshot date in the file name (today, 2026-09-14): holidays_excluded_from and the
-    // acceptance check against expected_<date>.json stay exact even when Manila is already on the next day.
+    // as_of = the snapshot date in the file name (2026-09-14): the acceptance check against expected_<date>.json
+    // stays exact even when Manila is already on the next day.
     $asOf = preg_match('/(\d{4}-\d{2}-\d{2})/', basename($file), $m) ? $m[1] : date('Y-m-d');
     $report = import_snapshot((int) $g['id'], $json, ['commit' => true, 'replace_all' => false, 'as_of' => $asOf]);
     echo "\n--- import $key (" . basename($file) . ") ---\n";
@@ -91,10 +92,9 @@ foreach (groups_all() as $g) {
     $to = (int) col('SELECT COUNT(*) FROM time_off t JOIN employees e ON e.id = t.employee_id WHERE e.group_id = ?', [$g['id']]);
     $adj = (int) col('SELECT COUNT(*) FROM adjustments a JOIN employees e ON e.id = a.employee_id WHERE e.group_id = ?', [$g['id']]);
     $ev = (int) col('SELECT COUNT(*) FROM events ev JOIN calendars c ON c.cal_key = ev.cal_key WHERE c.group_id = ?', [$g['id']]);
-    $hol = (int) col('SELECT COUNT(*) FROM events ev JOIN calendars c ON c.cal_key = ev.cal_key WHERE c.group_id = ? AND ev.is_holiday = 1', [$g['id']]);
-    printf("  %-22s employees %2d, time_off %3d, adjustments %d, events %2d (%d holidays), holidays_excluded_from %s\n",
-        $g['name'], $emp, $to, $adj, $ev, $hol, (string) group_by_id((int) $g['id'])['holidays_excluded_from']);
+    printf("  %-22s employees %2d, time_off %3d, adjustments %d, events %2d\n", $g['name'], $emp, $to, $adj, $ev);
 }
+echo '  schema_version: ' . (string) setting('schema_version', '?') . ' (code expects ' . SCHEMA_VERSION . ")\n";
 echo '  audit_log rows: ' . (int) col('SELECT COUNT(*) FROM audit_log') . "\n";
 echo $allOk ? "OK: reset complete\n" : "FAILED: an import did not commit\n";
 exit($allOk ? 0 : 1);

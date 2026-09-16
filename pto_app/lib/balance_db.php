@@ -180,11 +180,7 @@ function request_preview(int $employeeId, string $kind, string $start, string $e
     $remainingAfter = $cycles[$startKey]['remaining'];
 
     if ($days === 0) {
-        $warnings[] = 'No working days in this range (weekend or holiday only).';
-    }
-    if ($skipped !== []) {
-        $names = array_map(static fn(string $d): string => (new DateTimeImmutable($d))->format('M j'), $skipped);
-        $warnings[] = implode(', ', $names) . (count($skipped) === 1 ? ' is a company holiday, not charged.' : ' are company holidays, not charged.');
+        $warnings[] = 'No working days in this range (weekend only).';
     }
     // Overlap with an existing request.
     foreach ($requests as $r) {
@@ -225,12 +221,8 @@ function request_preview(int $employeeId, string $kind, string $start, string $e
         $warnings[] = 'Ends after the departure date ' . fmt_date($e['departed_on']) . '.';
     }
 
-    $line = plural($days, 'working day');
-    if ($skipped !== []) {
-        $names = array_map(static fn(string $d): string => (new DateTimeImmutable($d))->format('M j'), $skipped);
-        $line .= ' (' . implode(', ', $names) . (count($skipped) === 1 ? ' is a company holiday, not charged' : ' are company holidays, not charged') . ')';
-    }
-    $line .= '.';
+    // Section 5 (retired): holidays_skipped is still returned for the engine's sake but never rendered.
+    $line = plural($days, 'working day') . '.';
     foreach ($cycleInfo as $ci) {
         $line .= sprintf(' %s %s of %s left in cycle %s.', $kind, fmt_days($ci['remaining'][$kind]),
             fmt_days($ci['allotment'][$kind] + $ci['adjusted'][$kind]), $ci['label']);

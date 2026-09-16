@@ -61,7 +61,7 @@
       showSplit(null);
       return;
     }
-    // "3 working days (Dec 25 is a company holiday, not charged). PTO 2 of 3 left in cycle ..."
+    // "3 working days. PTO 2 of 3 left in cycle ..."
     box.appendChild(el('div', 'line', data.summary_line || ''));
 
     var remaining = data.remaining_after || {};

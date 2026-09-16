@@ -139,12 +139,33 @@ function sync_badge(?array $row, bool $showError = false): string
     return '';
 }
 
+/**
+ * "Schema behind" warning for logged-in users: settings.schema_version older than the code's SCHEMA_VERSION means a
+ * file in pto_app/migrations/ has not been pasted into phpMyAdmin yet. Empty on public pages or without a database.
+ */
+function layout_schema_warning(): string
+{
+    try {
+        if (current_user() === null) {
+            return '';
+        }
+        $db = setting('schema_version', '?') ?? '?';
+    } catch (Throwable) {
+        return '';
+    }
+    if ($db === SCHEMA_VERSION) {
+        return '';
+    }
+    return ' <span class="badge badge-warn">database schema ' . h($db) . ' is behind the code (' . h(SCHEMA_VERSION)
+        . '): apply the missing pto_app/migrations/*.sql in phpMyAdmin</span>';
+}
+
 function layout_footer(): void
 {
     echo '</main>';
     // One footer everywhere: the company line with the current year in the app timezone (now_str()). The version
     // line (app, engine, schema, PHP) moved to the Admin screen so the PHP version is served to admins only.
-    echo '<footer class="footer wrap">Lightsaber Promotions Inc. &copy; ' . h(substr(now_str(), 0, 4)) . '</footer>';
+    echo '<footer class="footer wrap">Lightsaber Promotions Inc. &copy; ' . h(substr(now_str(), 0, 4)) . layout_schema_warning() . '</footer>';
     foreach ($GLOBALS['layout_js'] ?? ['assets/app.js'] as $js) {
         echo '<script src="' . h(app_url($js)) . '?v=' . h(APP_VERSION) . '"></script>';
     }

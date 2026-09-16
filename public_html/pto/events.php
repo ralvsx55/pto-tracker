@@ -4,7 +4,8 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
 
 /**
  * Events (SPEC section 7.7): one tab per events-kind calendar of the selected group.
- * - Inline add row: title, start, end, "Company holiday (does not count against PTO)" checkbox (SPEC section 5).
+ * - Inline add row: title, start, end. Events are plain calendar entries; the company-holiday flag is retired
+ *   (SPEC section 5) and no longer exposed here.
  * - Edit / delete per row, audited with the full before/after row images so History can restore a delete.
  * - "Copy <year> events to <year+1>": every event of the selected year is copied one year forward.
  * - "Possibly misfiled" flag: importer-flagged ids (settings.misfiled_events, SPEC section 6) plus a title
@@ -106,8 +107,7 @@ function events_validate(string $calKey, array $cals): array
     $title = (string) post('title', '');
     $startRaw = (string) post('start', '');
     $endRaw = (string) post('end', '');
-    $holiday = post('is_holiday') === '1';
-    $values = ['title' => $title, 'start' => $startRaw, 'end' => $endRaw, 'is_holiday' => $holiday, 'cal_key' => $calKey];
+    $values = ['title' => $title, 'start' => $startRaw, 'end' => $endRaw, 'cal_key' => $calKey];
     $start = to_date($startRaw);
     $end = $endRaw === '' ? $start : to_date($endRaw);
 
@@ -130,20 +130,15 @@ function events_validate(string $calKey, array $cals): array
         'title'      => $title,
         'start_date' => ymd($start),
         'end_date'   => ymd($end),
-        'is_holiday' => $holiday ? 1 : 0,
     ];
     return ['error' => $error, 'data' => $data, 'values' => $values];
 }
 
-/** Audit summary (SPEC section 11): "Company Events & Holidays: Christmas 2026-12-25..2026-12-25 (company holiday) added". */
+/** Audit summary (SPEC section 11): "Company Events & Holidays: Christmas 2026-12-25..2026-12-25 added". */
 function events_summary(array $cals, array $ev, string $verb): string
 {
     $label = (string) ($cals[$ev['cal_key']]['label'] ?? $ev['cal_key']);
-    $s = $label . ': ' . $ev['title'] . ' ' . $ev['start_date'] . '..' . $ev['end_date'];
-    if ((int) $ev['is_holiday'] === 1) {
-        $s .= ' (company holiday)';
-    }
-    return $s . ' ' . $verb;
+    return $label . ': ' . $ev['title'] . ' ' . $ev['start_date'] . '..' . $ev['end_date'] . ' ' . $verb;
 }
 
 /** events.php?g=<key>&cal=<cal>[&year=<year>][&extra]. */
@@ -162,7 +157,7 @@ function events_year_after(string $year, string $startDate): string
     return $year === 'all' ? 'all' : substr($startDate, 0, 4);
 }
 
-/** Weekdays inside an event (what a holiday event would not charge); pure engine function. */
+/** Weekdays (Mon-Fri) inside an event; pure engine function. */
 function events_weekdays(array $ev): int
 {
     $s = to_date((string) $ev['start_date']);
@@ -181,7 +176,7 @@ function events_cal_options(array $cals, string $selected): string
 }
 
 /**
- * The five input cells of the add row / edit row (title [+ calendar select], start, end, weekdays, holiday).
+ * The four input cells of the add row / edit row (title [+ calendar select], start, end, weekdays).
  * The inputs belong to the form with id $formId, which sits outside the table (a form cannot span table cells).
  */
 function events_input_cells(string $formId, array $v, array $cals, bool $withCal, string $prefix): string
@@ -198,8 +193,6 @@ function events_input_cells(string $formId, array $v, array $cals, bool $withCal
     // data-follow (app.js): the end date follows the start date until it is set explicitly.
     $html .= '<td><input' . $f . ' type="date" name="end" id="' . h($prefix) . '-end" data-follow="' . h($prefix) . '-start" value="' . h((string) $v['end']) . '" aria-label="End date"></td>';
     $html .= '<td class="num muted"></td>';
-    $html .= '<td><label class="ev-check"><input' . $f . ' type="checkbox" name="is_holiday" value="1"' . ($v['is_holiday'] ? ' checked' : '')
-        . '> Company holiday (does not count against PTO)</label></td>';
     return $html;
 }
 
@@ -416,7 +409,6 @@ if (is_post()) {
                     'title'      => $ev['title'],
                     'start_date' => $ns,
                     'end_date'   => $ne,
-                    'is_holiday' => (int) $ev['is_holiday'],
                     'created_at' => now_str(), 'created_by' => $userId,
                     'updated_at' => now_str(), 'updated_by' => $userId,
                 ];
@@ -432,7 +424,7 @@ if (is_post()) {
         $msg = 'Copied ' . plural($result[0], 'event') . ' from ' . $from . ' to ' . $to
             . ($result[1] > 0 ? ' (' . $result[1] . ' already there, skipped)' : '') . '.';
         if ($result[0] > 0) {
-            $msg .= ' Check floating holidays (Thanksgiving, Memorial Day, Labor Day, Easter) and fix their dates.';
+            $msg .= ' Check floating dates (Thanksgiving, Memorial Day, Labor Day, Easter) and fix them.';
             $msg = rtrim($msg . ' ' . events_after_write($groupId, $calKey));
         }
         flash('ok', $msg);
@@ -467,9 +459,8 @@ if ($year !== 'all') {
 $list = rows("SELECT * FROM events WHERE $where ORDER BY start_date DESC, id DESC", $p);
 
 $copyYear = $year !== 'all' ? (int) $year : ($years[0] ?? null);
-$holidaysFrom = group_holidays_from($group);
 $otherCals = array_filter($cals, static fn(array $c): bool => $c['cal_key'] !== $calKey);
-$addValues = $formValues !== null && $editId === 0 ? $formValues : ['title' => '', 'start' => '', 'end' => '', 'is_holiday' => false, 'cal_key' => $calKey];
+$addValues = $formValues !== null && $editId === 0 ? $formValues : ['title' => '', 'start' => '', 'end' => '', 'cal_key' => $calKey];
 
 // ------------------------------------------------------------------ page
 
@@ -490,13 +481,6 @@ foreach ($cals as $k => $c) {
     echo '</a>';
 }
 echo '</nav>';
-
-// SPEC section 5: what the holiday checkbox does for this group.
-echo '<p class="help">Events marked as a company holiday are not charged against PTO';
-echo $holidaysFrom !== null
-    ? ' for requests starting on or after ' . h($holidaysFrom->format('m/d/Y')) . ' (Admin &gt; Groups changes that date).'
-    : ' &mdash; but the rule is switched off for this group (Admin &gt; Groups sets the start date).';
-echo '</p>';
 
 // Year filter + copy button.
 echo '<div class="toolbar ev-toolbar">';
@@ -541,7 +525,7 @@ if ($editId > 0) {
 
 // Sortable (app.js); the inline add row is data-nosort so it stays at the top whatever the sort.
 echo '<div class="table-wrap"><table class="ev-table sortable"><thead><tr>';
-echo '<th data-sort="text">Title</th><th data-sort="date">Start</th><th data-sort="date">End</th><th class="num" data-sort="num">Weekdays</th><th data-sort="num">Company holiday</th><th data-sort="text">Calendar</th><th>Actions</th>';
+echo '<th data-sort="text">Title</th><th data-sort="date">Start</th><th data-sort="date">End</th><th class="num" data-sort="num">Weekdays</th><th data-sort="text">Calendar</th><th>Actions</th>';
 echo '</tr></thead><tbody>';
 
 // Inline add row (SPEC section 7.7).
@@ -555,7 +539,7 @@ foreach ($list as $ev) {
 
     if ($id === $editId) {
         $editFound = true;
-        $v = $formValues ?? ['title' => $ev['title'], 'start' => $ev['start_date'], 'end' => $ev['end_date'], 'is_holiday' => (int) $ev['is_holiday'] === 1, 'cal_key' => $ev['cal_key']];
+        $v = $formValues ?? ['title' => $ev['title'], 'start' => $ev['start_date'], 'end' => $ev['end_date'], 'cal_key' => $ev['cal_key']];
         echo '<tr class="ev-edit" id="ev-' . h((string) $id) . '">' . events_input_cells('ev-edit', $v, $cals, true, 'ev-' . $id);
         echo '<td data-v="' . h(sync_badge_state($ev)) . '">' . sync_badge($ev) . '</td><td class="ev-actions"><button form="ev-edit" class="btn btn-primary btn-sm" type="submit">Save</button> '
             . '<a class="btn btn-sm" href="' . h($here) . '">Cancel</a></td></tr>';
@@ -576,7 +560,6 @@ foreach ($list as $ev) {
     echo '<td data-v="' . h((string) $ev['start_date']) . '">' . h(fmt_date((string) $ev['start_date'])) . '</td>';
     echo '<td data-v="' . h((string) $ev['end_date']) . '">' . h(fmt_date((string) $ev['end_date'])) . '</td>';
     echo '<td class="num">' . h((string) events_weekdays($ev)) . '</td>';
-    echo '<td data-v="' . ((int) $ev['is_holiday'] === 1 ? '1' : '0') . '">' . ((int) $ev['is_holiday'] === 1 ? '<span class="badge badge-ok">Company holiday</span>' : '<span class="muted">-</span>') . '</td>';
     echo '<td data-v="' . h(sync_badge_state($ev)) . '">' . sync_badge($ev) . '</td>';
     echo '<td class="ev-actions"><a class="btn btn-sm" href="' . h(events_url($group, $calKey, $year, ['edit' => $id])) . '#ev-' . h((string) $id) . '">Edit</a> ';
     echo events_button_form($here, ['action' => 'delete', 'id' => $id], 'Delete', 'btn-danger',
@@ -584,7 +567,7 @@ foreach ($list as $ev) {
     echo '</td></tr>';
 }
 if ($list === []) {
-    echo '<tr><td colspan="7" class="muted">No events on ' . h((string) $cal['label']) . ($year !== 'all' ? ' in ' . h($year) : '') . ' yet. Use the row above to add one.</td></tr>';
+    echo '<tr><td colspan="6" class="muted">No events on ' . h((string) $cal['label']) . ($year !== 'all' ? ' in ' . h($year) : '') . ' yet. Use the row above to add one.</td></tr>';
 }
 echo '</tbody></table></div>';
 

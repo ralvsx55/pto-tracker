@@ -14,14 +14,15 @@ existing Liquid Web account) that replaces two Google Sheets + Apps Script PTO t
 | US office | `us` | Lightsaber Promotions | 15 | PTO + Vacation | https://lightsaberpromotions.com/timeoff518652351 |
 | Manila artists | `manila` | Bright Bird Design | 18 | PTO only | https://lightsaberpromotions.com/manilapto |
 
-Each group has its own employees, policy, event calendars, holidays, Google Calendars and viewer page.
+Each group has its own employees, policy, event calendars, Google Calendars and viewer page.
 Admins see both. The database is the only source of truth; Google Calendars become a read-only mirror
 (Milestone 2). Balances are never stored; they are recomputed from `employees + time_off + adjustments + events`
 on every read by one pure-function engine.
 
 Confirmed facts that shape the build:
 - The company Google account that owns all ten calendars is a **consumer Gmail** account (no Workspace).
-- **Company holidays do not count against PTO** for anyone, in either group (new rule; the sheets counted them).
+- **Every day off is PTO or Vacation**, in either group, exactly as the sheets counted it; the "company holiday does
+  not count against PTO" idea was built and then retired (section 5).
 - The **viewer pages need a password** (one shared password per group) with a **long trust cookie** so staff
   are not asked again for months. Admin/editor screens use real accounts.
 - **Departed employees** are removed from every calendar and from the viewer page but their history is kept.
@@ -42,7 +43,7 @@ PTO-Tracker/                       (= /home/CPUSER on the server)
       lib/   bootstrap.php db.php auth.php csrf.php policy.php balance.php balance_db.php groups.php audit.php layout.php helpers.php viewer_auth.php
              google.php sync.php alerts.php (M2, section 14)
       cron/  sync.php nightly.php (M2, section 14.4)
-      migrations/001_init.sql      (+ 00N_*.sql later; additive only)
+      migrations/001_init.sql      (+ 002_retire_holidays.sql, 00N_*.sql ...; additive only)
       tools/ import_sheet.php smoke.php dev_reset.php sync_cli.php balance_oracle.py manila_oracle.py
       tests/ balance_test.php sync_test.php fixtures/us_snapshot_2026-09-14.json fixtures/manila_snapshot_2026-09-14.json
       config.example.php  README.md
@@ -91,8 +92,9 @@ Shared rules (both groups), verified against the sheets today:
    `date(D.year-1, H.month, H.day)`; `cycle_end` is exclusive, one year later. Feb 29 hires roll to Mar 1 in non-leap
    years (PHP `setDate` behaves like JS `new Date(y,m,d)`). A request starting on the anniversary is in the new cycle.
 2. Years of service at X = `X.year - H.year`, minus 1 if `(X.month, X.day) < (H.month, H.day)`. Not clamped.
-3. Days consumed = calendar days in `[start, end]` with ISO weekday 1-5, **minus company holidays** (section 5).
-   No half days, no carry-over, no caps; balances may go negative and are shown in red.
+3. Days consumed = calendar days in `[start, end]` with ISO weekday 1-5. (The engine can also subtract a holiday set,
+   dormant since section 5 was retired.) No half days, no carry-over, no caps; balances may go negative and are
+   shown in red.
 4. Adjustments: `days` (fractional allowed, sign = grant/deduct) added to the allotment of the kind for the cycle
    whose `[cycle_start, cycle_end)` contains `effective_date`.
 5. Running balance per request (the sheets' E/F columns): sort the employee's requests by `(start_date, id)`;
@@ -106,7 +108,7 @@ Acceptance (in `tests/balance_test.php`, hand-rolled runner, no PHPUnit):
 - US fixture: all 177 rows reproduce the sheet's stored PTO-remaining and Vacation-remaining values and the 15
   current-cycle balances as of 2026-09-14 (Walker R 2/3, 14/15; Catuto 3/3, 12/15; Ketter 2/3, 10/15; Modzik 3/3,
   13/15; Swafford 1/3, 15/15; Danalewich 3/3, 15/15; Moss 3/3, 0/5; Coleman 3/3, 10/10; Walker J 2/3, 0/5; the six
-  2026 hires 0/0). Holiday exclusion is inactive for these rows (section 5), so the numbers are exactly the sheet's.
+  2026 hires 0/0). No holiday exclusion applies (section 5 is retired), so the numbers are exactly the sheet's.
 - Manila fixture: the 18 current/next balances as of 2026-09-14 computed by the sheet's `getDataAsJson` logic with
   the two adjustments anchored (section 9): Myra 1/10, Miguel 6/10 (see note), John Michael 5/10, John Roman Cano
   10/10, Raymond Caspe 10/10 (12 allotted), Jam 2/10, Chona 5/5, Mary Ann 6/10, Eric Codog 0/3, Arlan 3/5, Rei 5/5,
@@ -117,23 +119,29 @@ Acceptance (in `tests/balance_test.php`, hand-rolled runner, no PHPUnit):
   Rimalyn 2026-04-02..2026-04-08 charges 2 to the 2025 cycle and 3 to the 2026 cycle.
 - Edge cases, hand-written: Saturday-only row (0 days), 6-working-day Mon-Mon row, request on the anniversary,
   the day before, negative balances, adjustment on `cycle_start` (in) and on `cycle_end` (out), fractional adjustment,
-  Feb 29 hire, Dec 31/Jan 1, a request before hire date (allotment 0, negative), a holiday inside a request before
-  and after `holidays_excluded_from`, a two-day holiday spanning a weekend.
+  Feb 29 hire, Dec 31/Jan 1, a request before hire date (allotment 0, negative), and, for the dormant engine
+  capability only, a holiday inside a request before and after `holidays_excluded_from` and a two-day holiday
+  spanning a weekend.
 - `tools/balance_oracle.py` and `tools/manila_oracle.py` (the Python re-implementations that produced the numbers
   above) stay in the repo as independent implementations.
 
-## 5. Company holidays
+## 5. Company holidays (retired)
 
-- `events.is_holiday = 1` marks an event as "office closed, not charged against PTO". It belongs to the group of its
-  calendar. The events form shows it as a checkbox labelled "Company holiday (does not count against PTO)".
-- The engine excludes a weekday from a request's consumed days when it falls inside a holiday event of the
-  employee's group **and** the request's `start_date >= groups.holidays_excluded_from`. `NULL` means the rule is off.
-  The importer sets it to the import date for both groups; Admin can change it. Reason: 26 existing US rows overlap
-  the 2024 and 2025 Christmas breaks and were charged; applying the rule from a date keeps history and the acceptance
-  test exact while every new request benefits.
-- Import flags `is_holiday` where the title matches `/holiday|company break|office closed|christmas break/i`;
-  parties, luncheons, sales and factory closings stay unflagged. The migration report lists what was flagged.
-- The time-off form's live preview says e.g. `3 working days (Dec 25 is a company holiday, not charged)`.
+Events are plain calendar entries and every day off is PTO or Vacation; a request charges its Monday-to-Friday days
+exactly as the sheets did. The "company holiday (does not count against PTO)" feature built in Milestone 1 is
+retired from the product but kept dormant in the engine:
+
+- **Schema unchanged**: `events.is_holiday` (always 0) and `groups.holidays_excluded_from` (always NULL = rule off)
+  stay in the database. Migration `002_retire_holidays.sql` zeroes the rows the first import flagged, nulls both
+  groups' dates and bumps `schema_version` to 2; until it is pasted into phpMyAdmin the footer of every logged-in page
+  and the Self-test say the schema is behind the code (`SCHEMA_VERSION` in `lib/bootstrap.php`).
+- **Engine unchanged**: `lib/balance.php` keeps its `$holidayDates` / `$holidaysFrom` parameters and
+  `tests/balance_test.php` keeps the edge cases, so the capability can come back without a rewrite.
+  `group_holidays()` returns nothing while no row is flagged and `group_holidays_from()` returns null.
+- **Not exposed anywhere**: no checkbox or column on Events, no field on Admin > Groups, no "holiday, not charged"
+  wording on the time-off preview, dashboard, viewer page, employee ledger or time-off list
+  (`request_preview()` still returns `holidays_skipped`, always empty; nothing renders it). The importer writes
+  `is_holiday = 0` for every row and never touches `holidays_excluded_from`.
 
 ## 6. Data model (`migrations/001_init.sql`)
 
@@ -144,7 +152,7 @@ CREATE TABLE groups (
   name         VARCHAR(80) NOT NULL,                   -- 'Lightsaber Promotions', 'Bright Bird Design'
   timezone     VARCHAR(40) NOT NULL,                   -- 'America/New_York', 'Asia/Manila'
   policy_key   VARCHAR(20) NOT NULL,                   -- 'us' | 'manila' (lib/policy.php)
-  holidays_excluded_from DATE NULL,                    -- section 5; NULL = rule off
+  holidays_excluded_from DATE NULL,                    -- section 5 (retired): always NULL = rule off
   viewer_title    VARCHAR(80) NOT NULL,                -- browser title of the viewer page
   viewer_heading  VARCHAR(120) NOT NULL,               -- h1 on the viewer page
   viewer_embed_src TEXT NULL,                          -- full Google Calendar embed URL (kept verbatim from the old pages)
@@ -226,7 +234,7 @@ CREATE TABLE events (
   title         VARCHAR(200) NOT NULL,
   start_date    DATE NOT NULL,
   end_date      DATE NOT NULL,                         -- inclusive
-  is_holiday    TINYINT(1) NOT NULL DEFAULT 0,         -- section 5
+  is_holiday    TINYINT(1) NOT NULL DEFAULT 0,         -- section 5 (retired): always 0
   legacy_row    INT UNSIGNED NULL,
   google_event_id VARCHAR(120) NULL, synced_fingerprint CHAR(40) NULL, sync_error VARCHAR(300) NULL,
   created_at DATETIME NOT NULL, created_by INT UNSIGNED NULL,
@@ -333,10 +341,9 @@ group sees only theirs.
    configured" in M1). Buttons: + Time off, + Employee. Toggle: show former employees.
 3. **Time off form** `request.php` [both]. Employee select (active, current group, last-used first), kind as segmented
    buttons (only the group's kinds; Manila shows one), start date, end date auto-filled, note. Live preview line via
-   `preview.php` (session-checked JSON: working days, holidays skipped, resulting balance, warnings). Non-blocking
+   `preview.php` (session-checked JSON: working days, resulting balance, warnings). Non-blocking
    warnings: zero working days; balance goes negative; overlaps an existing request; straddles an anniversary (US: offers
-   "split into two rows"; Manila: says how many days go to each cycle); includes a company holiday (US/M: "not charged");
-   before hire date; after departure date. Save keeps the employee selected for quick repeated entry. Edit mode via `?id=`.
+   "split into two rows"; Manila: says how many days go to each cycle); before hire date; after departure date. Save keeps the employee selected for quick repeated entry. Edit mode via `?id=`.
 4. **Time off list** `requests.php` [both]. Newest first; filters employee, kind, cycle year; columns like the sheet:
    employee, kind, start, end, working days, remaining after (per kind), note, calendar state (M1: "not synced").
    Edit, delete (confirm; full before-image to audit_log). Export CSV in the sheet's column order.
@@ -350,7 +357,7 @@ group sees only theirs.
    running balance. Adjustments panel (+ grant/deduct, kind, effective date with the resulting cycle shown, mandatory
    reason). "Mark as departed on <date>" (M1: sets status; M2 adds the calendar deletes). Un-depart.
 7. **Events** `events.php?g=us&cal=us_holidays|us_factory|us_sales` (Manila: `mn_events|mn_factory|mn_other`) [both].
-   One tab per events calendar of the group. Inline add row (title, start, end, holiday checkbox), edit/delete per row,
+   One tab per events calendar of the group. Inline add row (title, start, end), edit/delete per row,
    "Copy last year's events to <next year>". Rows imported onto an odd sheet (the 2023 party/luncheon/sale rows on the
    US Factory Closings sheet; the 2023-24 US office closures on the Manila Factory Closings sheet) are flagged
    "possibly misfiled" with a one-click move to another calendar of the same group.
@@ -358,12 +365,13 @@ group sees only theirs.
    before/after, and Restore for deleted time-off and event rows.
 9. **Admin** `admin.php` [master admin only]. Users (add, role Master admin / Admin, group limit, temporary password,
    deactivate; the last active master admin cannot be demoted or deactivated). Groups: "Require the office password on
-   the viewer page" checkbox (section 8), viewer password (set/change; bumps version), `holidays_excluded_from`,
+   the viewer page" checkbox (section 8), viewer password (set/change; bumps version),
    viewer heading/title, embed URL. Calendars: the ten rows with
    IDs and active/sync toggles (sync buttons are M2). Import (upload the JSON snapshot or CSVs, dry run, commit). Self-test.
-   Footer everywhere: app version, engine version, schema version, PHP version.
-10. **Setup** `setup.php?token=` runs once: checks PHP, extensions, `.htaccess`, DB connection; runs `001_init.sql`
-    if `settings` is missing; creates the first admin; sets both viewer passwords; prints "delete this file".
+   Version line (app, engine, schema, PHP) on the Admin screen; the footer of every logged-in page warns when
+   `settings.schema_version` is behind the code's `SCHEMA_VERSION` (a migration has not been applied yet).
+10. **Setup** `setup.php?token=` runs once: checks PHP, extensions, `.htaccess`, DB connection; runs every
+    `migrations/*.sql` in order if `settings` is missing; creates the first admin; sets both viewer passwords; prints "delete this file".
 
 ## 8. Viewer-page authentication (trust cookie)
 
@@ -404,14 +412,14 @@ in cycles before his hire date with allotment 0); "Time Requested Off" -> time_o
 adjustments with `effective_date` anchored: `CURRENT` keeps the sheet's effective date; `NEXT` uses the start of the
 cycle after the one containing the sheet's effective date (Miguel: 2026-04-22; Raymond: 2026-03-03); reason = the
 sheet's note; "Any Additional Events Calendar" -> `mn_events`; "Factory Closings Calendar" -> `mn_factory`.
-`holidays_excluded_from` for both groups = the import date.
+Every event is written with `is_holiday = 0` and `holidays_excluded_from` is never set (section 5 is retired).
 
 "Replace all": inside the transaction delete `birthday_events`, `adjustments`, `time_off`, `events`, then `employees`
 **of the group being imported** (the other group is untouched), import; `users`, `groups`, `calendars`, `settings`,
 `audit_log` untouched; one `audit_log` row records the replacement. Auto-increment counters are not reset (ALTER TABLE
 is DDL and would commit the transaction in MariaDB). Titles on a Factory Closings sheet are treated as factory closings
 when they match `/factor|chinese|festival|national day|labor day|tomb|dragon/i`; the rest are "possibly misfiled"
-(ids kept in `settings.misfiled_events`) and never `is_holiday`-flagged as factory rows.
+(ids kept in `settings.misfiled_events`).
 
 ## 10. Engine API (`lib/balance.php`), pure functions, no DB, no clock
 
@@ -430,7 +438,8 @@ summary(array $policy, array $employee, array $requests, array $adjustments, arr
    // ['current'=>['start','end','allotment','used','remaining'], 'next'=>[...], 'after_date'=>'MM/DD/YYYY']
 ```
 All dates in/out are `DateTimeImmutable` at midnight; requests/adjustments are plain arrays with string dates.
-`ENGINE_VERSION = '1.0.0'` constant.
+`ENGINE_VERSION = '1.0.0'` constant. The `$holidayDates` / `$holidaysFrom` parameters are the dormant section 5
+capability: callers pass `group_holidays()` (empty) and `group_holidays_from()` (null), so nothing is subtracted.
 
 ## 11. Audit
 
@@ -443,10 +452,10 @@ is called inside the same transaction as the change. Summaries read like
 - `run-local.bat`: `C:\xampp\php\php.exe -S 127.0.0.1:8020 -t public_html\pto` (XAMPP's MariaDB must be running;
   the XAMPP control panel or `mysqld --standalone`). Open `http://127.0.0.1:8020/`.
 - `pto_data/config.php` locally: `environment = 'local'`, db `pto_local` / user `root` / empty password (XAMPP default).
-- `tools/dev_reset.php`: drops and recreates the `pto_local` schema from `001_init.sql`, creates admin
-  `chris@lightsaberpromotions.com` / `changeme-now`, sets both viewer passwords to `staff`, imports both fixtures with
-  `as_of` = the snapshot date in the fixture file name (2026-09-14), so `holidays_excluded_from` and the acceptance
-  check against `expected_2026-09-14.json` stay exact on any day (and even when Manila is already on the next day).
+- `tools/dev_reset.php`: drops and recreates the `pto_local` schema from every `migrations/NNN_*.sql` in order,
+  creates admin `chris@lightsaberpromotions.com` / `changeme-now`, sets both viewer passwords to `staff`, imports both
+  fixtures with `as_of` = the snapshot date in the fixture file name (2026-09-14), so the acceptance check against
+  `expected_2026-09-14.json` stays exact on any day (and even when Manila is already on the next day).
 - `ledger()` returns its cycles keyed by `Y-m-d` cycle start (in order); `summary()` returns the two cycle entries.
 - `php pto_app/tests/balance_test.php` must print one green line before any upload.
 

@@ -188,3 +188,21 @@ function apply_sql_file(string $path): int
     }
     return $n;
 }
+
+/** Every pto_app/migrations/NNN_*.sql in numeric order (001_init.sql first); absolute paths. */
+function migration_files(): array
+{
+    $files = glob(PTO_APP . '/migrations/[0-9][0-9][0-9]_*.sql') ?: [];
+    sort($files, SORT_STRING);
+    return $files;
+}
+
+/** Apply every migration file in order (a fresh database). Returns [basename => statement count]. */
+function apply_migrations(): array
+{
+    $out = [];
+    foreach (migration_files() as $file) {
+        $out[basename($file)] = apply_sql_file($file);
+    }
+    return $out;
+}

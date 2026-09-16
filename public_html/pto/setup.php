@@ -57,8 +57,11 @@ $err = null;
 if (is_post() && $dbOk) {
     $action = post('action');
     if ($action === 'migrate' && !$schemaPresent) {
-        $n = apply_sql_file(PTO_APP . '/migrations/001_init.sql');
-        flash('ok', "Applied 001_init.sql ($n statements).");
+        $applied = [];
+        foreach (apply_migrations() as $file => $n) {
+            $applied[] = "$file ($n statements)";
+        }
+        flash('ok', 'Applied ' . implode(', ', $applied) . '.');
         redirect('setup.php?token=' . rawurlencode($token));
     }
     if ($action === 'admin' && $schemaPresent && $userCount === 0) {
@@ -100,7 +103,7 @@ echo '</ul>';
 
 if ($dbOk && !$schemaPresent) {
     echo '<form method="post">' . csrf_field() . '<input type="hidden" name="token" value="' . h($token) . '"><input type="hidden" name="action" value="migrate">';
-    echo '<p>The database is empty. Apply <code>migrations/001_init.sql</code> (tables, the two groups, ten calendars)?</p>';
+    echo '<p>The database is empty. Apply every <code>migrations/*.sql</code> in order (tables, the two groups, ten calendars)?</p>';
     echo '<div class="actions"><button class="btn btn-primary" type="submit">Create the schema</button></div></form>';
 } elseif ($schemaPresent && $userCount === 0) {
     echo '<h2>First admin and viewer passwords</h2>';

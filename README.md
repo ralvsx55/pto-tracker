@@ -26,7 +26,7 @@ existing Liquid Web cPanel account.
 
 1. Start XAMPP's MySQL (control panel, or `C:\xampp\mysql\bin\mysqld.exe --standalone`).
 2. `C:\xampp\php\php.exe pto_app\tools\dev_reset.php` - creates `pto_data\config.php` if missing,
-   rebuilds the `pto_local` database from `pto_app\migrations\001_init.sql`, creates the local admin
+   rebuilds the `pto_local` database from every `pto_app\migrations\NNN_*.sql` in order, creates the local admin
    and imports both fixture snapshots.
 3. `run-local.bat` - serves `public_html\pto` on http://127.0.0.1:8020/.
 4. `C:\xampp\php\php.exe pto_app\tests\balance_test.php` - must print one green line before any upload.

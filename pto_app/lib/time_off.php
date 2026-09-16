@@ -7,7 +7,7 @@ declare(strict_types=1);
  * outer one) and writes its audit row in the same transaction (SPEC section 11).
  */
 
-/** Working days a time_off row charges: weekdays minus the holidays that apply to it (SPEC section 3 rule 3 + section 5). */
+/** Working days a time_off row charges: weekdays (SPEC section 3 rule 3; the section 5 holiday exclusion is retired and dormant). */
 function time_off_days(array $group, array $row): int
 {
     $s = to_date($row['start_date']);

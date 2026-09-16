@@ -231,10 +231,6 @@ function employee_render_ledger(array $kinds, array $cycles, array $employee, ar
                 if ($r['split']) {
                     $days .= ' <span class="help">of ' . h(fmt_days($r['days'])) . ' (split)</span>';
                 }
-                if ($r['holidays_skipped'] !== []) {
-                    $names = array_map(static fn(string $d): string => fmt_date($d, 'M j'), $r['holidays_skipped']);
-                    $days .= ' <span class="help">(' . h(implode(', ', $names)) . ' holiday, not charged)</span>';
-                }
                 echo '<td class="num">' . $days . '</td>';
                 foreach ($kinds as $k) {
                     echo '<td class="num' . balance_class($r['remaining_after'][$k]) . '">' . h(fmt_days($r['remaining_after'][$k])) . '</td>';
@@ -576,7 +572,7 @@ echo '</div></div>';
 // Ledger
 echo '<h2>Ledger</h2>';
 echo '<p class="help">One block per cycle from the hire date through the next cycle (plus any cycle a request or adjustment touches), newest first. '
-    . 'Balances are recomputed from time off, adjustments and company holidays on every view; the "after" columns are the running balance the sheets showed.</p>';
+    . 'Balances are recomputed from time off and adjustments on every view; the "after" columns are the running balance the sheets showed.</p>';
 $syncRows = [];
 foreach (rows('SELECT id, google_event_id, sync_error FROM time_off WHERE employee_id = ?', [$id]) as $tr) {
     $syncRows[(int) $tr['id']] = $tr;

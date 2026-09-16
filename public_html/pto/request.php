@@ -7,8 +7,8 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
  *  - employee select: active employees of the current group, the last-used one first (remembered in the session)
  *  - kind as segmented buttons showing only the group's kinds (Manila shows one)
  *  - start date, end date auto-filled (app.js data-follow), note
- *  - live preview line from preview.php via assets/request.js on every change (working days, holidays skipped,
- *    remaining per kind, non-blocking warnings); a US request spanning an anniversary offers "Split into two rows"
+ *  - live preview line from preview.php via assets/request.js on every change (working days, remaining per kind,
+ *    non-blocking warnings); a US request spanning an anniversary offers "Split into two rows"
  *    which posts two requests; a Manila straddle explains how the days split (the preview's warning)
  *  - edit mode via ?id=; after a save the employee stays selected for the next entry
  * Delete lives in requests.php (one handler); the edit view links to it. The writes are lib/time_off.php.
@@ -298,7 +298,7 @@ if ($editRow !== null) {
 }
 echo '</div>';
 
-echo '<p class="help">Working days are Monday to Friday minus company holidays'
+echo '<p class="help">Working days are Monday to Friday'
     . ($policy['straddle'] === 'split'
         ? '; a request that spans the anniversary is charged day by day to the cycle each day falls in.'
         : '; a request is charged to the cycle containing its start date (spanning requests can be split into two rows).')

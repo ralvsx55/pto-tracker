@@ -290,11 +290,7 @@ foreach ($list as $r) {
     echo '<td>' . h($r['kind']) . '</td>';
     echo '<td data-v="' . h($r['start_date']) . '">' . h(fmt_date($r['start_date'])) . '</td>';
     echo '<td data-v="' . h($r['end_date']) . '">' . h(fmt_date($r['end_date'])) . '</td>';
-    $daysCell = h((string) $r['days']);
-    if ($first !== null && $first['holidays_skipped'] !== []) {
-        $daysCell .= '<span class="sub">' . h(count($first['holidays_skipped']) . ' holiday' . (count($first['holidays_skipped']) === 1 ? '' : 's') . ' skipped') . '</span>';
-    }
-    echo '<td class="num" data-v="' . h((string) $r['days']) . '">' . $daysCell . '</td>';
+    echo '<td class="num" data-v="' . h((string) $r['days']) . '">' . h((string) $r['days']) . '</td>';
     // Remaining after, per kind: the running balance of the charged cycle (both cycles for a split request);
     // requests in a future cycle carry the sheet's "After MM/DD/YYYY" marker on the first kind column.
     foreach ($kinds as $i => $k) {
