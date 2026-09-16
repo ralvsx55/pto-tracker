@@ -1,0 +1,109 @@
+{
+ "gaps": [
+  {
+   "issue": "Deployment step 1 sets the subdomain document root to /home/CPUSER/pto_web/public, outside public_html. cPanel's WHM Tweak Setting 'Restrict document roots to public_html' is On by default on most servers, so 'Create a New Domain' will refuse that path and the runbook stops at step 1 for a maintainer with no WHM access. It also drags in DNS + AutoSSL waiting for a new subdomain, which the design does not need.",
+   "severity": "blocker",
+   "fix": "Default to a folder on the existing domain: document root untouched, public files at /home/CPUSER/public_html/pto/ (served at https://<domain>/pto/), code at /home/CPUSER/pto_app/ and data at /home/CPUSER/pto_data/, with public/*.php doing `require dirname(__DIR__, 3).'/pto_app/lib/bootstrap.php'` (or a one-line path constant). Set the session cookie path to /pto/. No DNS, no new certificate, no tweak setting. Keep the subdomain as an optional variant that says 'requires WHM > Tweak Settings > Restrict document roots to public_html = Off, or a support ticket'."
+  },
+  {
+   "issue": "Section 7 and step 9 say 'Test connection' fetches each calendar's metadata and shows the service account's access role, 'which must be writer'. accessRole is only exposed on the CalendarList resource, not on calendars.get, and the only scope the design requests (calendar.events) does not authorize calendarList.* at all. Also, a calendar shared to a service account does not necessarily appear in its calendarList until calendarList.insert is called (the research asserts it does; practitioner reports are mixed). As written the acceptance check for the whole Google setup will 403.",
+   "severity": "major",
+   "fix": "Make Test connection a write probe: events.insert of a throwaway all-day event on 2000-01-01 titled 'LSP connection test', then events.delete it, and report OK only when both succeed (this proves writer, which reading cannot). If you want the role displayed, add scope https://www.googleapis.com/auth/calendar.calendarlist.readonly, call calendarList.insert({id}) once per calendar at setup, then calendarList.get; otherwise leave accessRole out of the design."
+  },
+  {
+   "issue": "Behaviour change hidden by a misreading of the script: addBirthdaysToCalendar (Code.gs 273-298) puts every existing event key into eventTitles BEFORE the delete loop, so the birthday delete pass is dead code and nothing has ever been removed from the birthday calendar. Today it accumulates 2023-2027 birthdays and keeps ex-employee and old-name birthdays forever. The new design (sync step 4) deletes any birthday occurrence outside {Y, Y+1}, silently changing what staff see (past birthdays vanish each January), and the cutover expectation 'about 30 birthdays adopted, a handful unmanaged' understates the unmanaged list, which will be roughly 15 x (years since 2023) plus any departed names.",
+   "severity": "major",
+   "fix": "State the current behaviour correctly (never deletes). Decide and write down the new rule; the safest fidelity rule is: never delete a birthday occurrence dated in the past; generate Y and Y+1 for active employees; delete only FUTURE occurrences for departed or renamed employees. Adjust the cutover expectation for the birthday calendar to 'adopt ~30, leave N prior-year events unmanaged' and add an explicit one-time Admin action 'delete all unmanaged birthday events dated before <year>' if Chris wants the calendar cleaned."
+  },
+  {
+   "issue": "Timezone handling is only half-specified. date.timezone is set through MultiPHP INI Editor, which writes the domain's php.ini/.user.ini (or FPM pool) and is not read by the CLI binary the three cron jobs use, so cron/nightly.php's $today and the birthday year Y come from the server's TZ (often UTC), which at 03:05 is still the previous day in New York for part of the year. DATETIME columns filled with NOW() likewise use the MySQL session TZ. The legacy JSON field anniversaryDate is a JS Date serialised to UTC (e.g. 2012-03-08T05:00:00.000Z, 04:00Z in DST), which api.php must reproduce DST-correctly if byte-compatibility is the goal.",
+   "severity": "major",
+   "fix": "Call date_default_timezone_set('America/New_York') in bootstrap.php unconditionally and compute $today = new DateTimeImmutable('today') there; pass created_at/updated_at from PHP rather than NOW(), or run SET time_zone='America/New_York' after connecting. For api.php build anniversaryDate as (new DateTimeImmutable(hire_date.' 00:00', NY))->setTimezone(UTC)->format('Y-m-d\\TH:i:s.000\\Z'). Add a fixture assertion for one EST and one EDT hire date."
+  },
+  {
+   "issue": "Internal contradiction in alerting: the three cron lines redirect `>> cron.log 2>&1`, so cPanel's 'email output to' can never fire, yet section 7 relies on it as one of the two alert channels. Separately, PHP mail() from the cPanel box sending as chris@lightsaberpromotions.com will fail SPF/DMARC if the domain's mail is on Google Workspace, so the only alert for a dead Google key may land in spam. Also section 3 says the nightly job writes the backup while section 10 adds a separate backup.php cron at 03:20.",
+   "severity": "major",
+   "fix": "Pick one channel: keep the redirects and send alerts from PHP with a From address the server is allowed to send for (e.g. pto-alerts@<domain> with the server IP in SPF, or a cPanel-created mailbox), and test it once during setup (Admin > Send test alert). Collapse nightly.php and backup.php into one nightly job so there is one cron line to edit on each PHP bump."
+  },
+  {
+   "issue": "Employee name changes and rehires are not handled. employees has UNIQUE (last_name, first_name), and calendar titles are derived from the current name, so (a) renaming an employee (marriage, nickname) rewrites the title of every historical PTO and birthday event and every audit summary; (b) a departed employee who is rehired cannot get a new row (new hire date, new cycle) because the name is unique, and editing the old row's hire_date changes all historical balances. Today's sheet stores the name per request row, so history keeps the old name.",
+   "severity": "major",
+   "fix": "Drop the UNIQUE key (warn on duplicates instead) or scope it to active rows; add employees.display_name_override or simply document that a rename PATCHes N past events (it trips no guard because it is PATCH not DELETE). For rehire: 'Mark as departed' then '+ Add employee' with the same name and the new hire date; the form should offer 'link to former record' so the ledger shows both stints. Add both to the edge-case table."
+  },
+  {
+   "issue": "Section 2 states that Timetastic, Calamari, Vacation Tracker etc. 'all ... push to Google Calendar through subscription feeds that Google refreshes only every 12-24 hours'. The research says the opposite for two of them: Calamari synchronises requests to Google Calendar directly and Vacation Tracker's Google Calendar integration is a direct write ('do not have this lag'). 'All of them exclude public holidays by default' is also stronger than the research ('most tools'). The dismissal still stands on the stated grounds (self-hosted, real DB, birthday/holiday calendars), but the feed-lag argument is wrong for two of the three real contenders.",
+   "severity": "major",
+   "fix": "Reword: 'Timetastic and the OSS options rely on webcal feeds (12-24 h lag); Calamari and Vacation Tracker write to Google Calendar directly but cost $360-1,200/yr and still leave the three event calendars and the birthday calendar to be maintained by hand.'"
+  },
+  {
+   "issue": "The design is roughly 3x larger than a solo cPanel maintainer needs for 15 people, and the 55-65 hour estimate is optimistic for 13 tables, three roles with lockout, an audit log with restore, a fingerprint-based adoption planner, unmanaged_events, sync_runs with stored plans, a pure-PHP SQL dumper, a migrations runner, an API rate limiter, ICS feeds and a doGet passthrough. Most of this is protection against the one-time cutover, not day-to-day need.",
+   "severity": "major",
+   "fix": "Cut to an MVP and move the rest to 'later if needed': (1) replace calendar_links/unmanaged_events/sync_runs with google_event_id + synced_fingerprint columns on time_off and events and a 3-column birthday_events table; list unmanaged events on the fly from events.list filtered by missing lsp property; log sync runs to a file. (2) Make adoption a one-time tools/adopt_existing_events.php run during cutover, not a permanent branch of the sync. (3) Back up with one cron line: /usr/bin/mysqldump --defaults-extra-file=/home/CPUSER/pto_data/my.cnf CPUSER_pto | gzip > .../pto-$(date +\\%F).sql.gz (mysqldump ships on every cPanel box) plus the JSON export you already planned; drop the hand-written dumper. (4) Ship two roles (admin, editor), no lockout counter, no viewer until asked. (5) Apply migrations by pasting SQL into phpMyAdmin; skip the in-app runner. (6) Skip ics.php and the API rate limiter entirely. MVP screens: dashboard, time-off form/list, employees, events, admin/calendars. That is 4 tables + 2 sync columns and closer to 30 hours."
+  },
+  {
+   "issue": "The doGet passthrough (cutover step 7) is under-specified: editing the Apps Script code does nothing to the live /exec URL until you open Deploy > Manage deployments > edit the EXISTING deployment > New version (a fresh 'New deployment' changes the URL and defeats the purpose). Also api_hits will record Google's IP, not the consumer's, so it can only say 'something calls', never who; and the claim that Apps Script > Executions shows doGet calls 'over the previous 90 days' is unverified (the Executions view is typically filtered to recent days).",
+   "severity": "major",
+   "fix": "Write the exact redeploy steps into the cutover list. Log the caller in Apps Script itself (append e.parameter / e.userAgent-less timestamp to a 'doGet hits' sheet) for the six-month grace period, and note that the Executions history window must be checked rather than assumed."
+  },
+  {
+   "issue": "Ownership durability of the Google side is not addressed: the five calendars, the Cloud project and the service account must belong to a company account that survives staff turnover, and secondary calendars need at least two people with 'Make changes and manage sharing'. If the calendars were created by an employee's personal or now-departed account, sharing to the SA is impossible and the whole Option 1 path stalls. There is also no written 'key is dead' runbook (SA key deleted, SA deleted, project shut down after 30-day grace, Calendar API disabled, share removed) beyond 'rotate every two years'.",
+   "severity": "major",
+   "fix": "Add to Milestone 0: open each calendar's Settings and sharing, confirm the owning account and add a second owner; create the Cloud project from that same company account and add Chris as a second project Owner. Add a README section 'Calendar sync stopped: how to reconnect' with the three-step key recreate/upload/Test procedure and the symptoms of each failure (401 invalid_grant = key, 403 = share/scope, 404 = calendar id/share)."
+  },
+  {
+   "issue": "PHP 8.2 is recommended as the deployment version in September 2026; its security support ends 2026-12-31, so the 'yearly bump' arrives within three months of go-live.",
+   "severity": "minor",
+   "fix": "Target ea-php83 or ea-php84 (both in EA4 per the research) and write the code to the same 8.2-8.5 subset."
+  },
+  {
+   "issue": "Dropped without comment: the Employee Start Date sheet's 'Combined Total' column (Vacation + PTO allotment). Trivial, but the office is used to seeing it.",
+   "severity": "minor",
+   "fix": "Show 'Total N' next to the two allotments on the dashboard and the employees list, or say explicitly that it is dropped."
+  },
+  {
+   "issue": "The inline-sync confirmation ('Saved. Calendar will update within 15 minutes.') is untrue while sync_mode = dry_run, which is the default after setup and the state during the whole shadow period.",
+   "severity": "minor",
+   "fix": "Show 'Saved. Calendar sync is in dry-run mode.' whenever sync_mode != live."
+  },
+  {
+   "issue": "sync_runs.plan_json grows without bound (up to 96 runs/day per dirty calendar plus nightly), and audit_log/api_hits are never pruned.",
+   "severity": "minor",
+   "fix": "Nightly job deletes sync_runs older than 90 days and api_hits older than 1 year; keep audit_log forever (it is small)."
+  },
+  {
+   "issue": "Locally the same layout rule puts pto_data under C:\\xampp\\htdocs, where it is web-served; on the server, pto_data at mode 700 breaks if the PHP handler is DSO/mod_php (runs as nobody) rather than PHP-FPM/lsapi/suPHP.",
+   "severity": "minor",
+   "fix": "Locally put pto_data next to htdocs (C:\\xampp\\pto_data) and resolve it via a config constant rather than a fixed relative path; on the server, note 'check WHM/cPanel MultiPHP Manager handler; if DSO, ask support to switch to PHP-FPM' in the setup checklist (setup.php can detect it via php_sapi_name()/posix_geteuid())."
+  },
+  {
+   "issue": "Content-Security-Policy: default-src 'self' blocks inline <script>, inline event handlers and inline <style>; the design says 'painless' but any onclick= or the live-preview snippet written inline will silently stop working.",
+   "severity": "minor",
+   "fix": "Keep all JS/CSS in the two asset files and add style-src 'self' explicitly; test the time-off form's live preview with the header on."
+  },
+  {
+   "issue": "Section 2 says staying in Google gives 'no audit trail ... and no restore path'. Google Sheets has version history with named versions and cell-level edit history, which is a restore path and a (crude) audit trail. The argument for leaving Google should not rest on that.",
+   "severity": "minor",
+   "fix": "Reword to 'no per-row audit log tied to a user, and restore is whole-sheet version rollback rather than per-request'."
+  },
+  {
+   "issue": "api.php must emit the same JSON types as the script: remaining* are JSON numbers (integers today), but PDO returns DECIMAL sums as strings, so a naive json_encode produces \"2\" instead of 2 once adjustments exist.",
+   "severity": "minor",
+   "fix": "Cast balances with +$x / (int)/(float) before json_encode and add a type assertion to verify.php --compare-url."
+  }
+ ],
+ "wrong_or_unverified_claims": [
+  "'The birthday routine matches on title plus date string and does keep its events' (section 7) and the context's 'each sync DELETES calendar events not present in the sheet': for the birthday calendar the delete loop (Code.gs 294-298) can never execute because every existing key was added to eventTitles at lines 275-277. The birthday calendar has never been pruned.",
+  "'Test connection ... shows the service account's access role, which must be writer' (sections 7, 10): accessRole exists only on CalendarList entries, calendarList.* is not covered by the calendar.events scope, and a calendar shared to a service account may not be in its calendarList without calendarList.insert. The check as designed will 403.",
+  "'all of them push to Google Calendar through subscription feeds' (section 2): the research states Calamari and Vacation Tracker write to Google Calendar directly with no feed lag.",
+  "'all of them exclude public holidays from consumed days by default' (section 2): research says 'most tools' and names four; not verified for all six listed.",
+  "'check Apps Script > Executions for doGet calls over the previous 90 days' (section 7 step 7, Milestone 0): the retention/filter window of the Executions view was not verified by the research.",
+  "'Replace the Apps Script doGet body with a one-line UrlFetchApp.fetch ... so the old JSON URL keeps working': true only if the change is published as a new version of the EXISTING deployment; not stated.",
+  "'Set Document Root to /home/CPUSER/pto_web/public' (section 10 step 1): cPanel refuses document roots outside public_html when the WHM tweak 'Restrict document roots to public_html' is on (default), which the runbook does not mention.",
+  "'date.timezone America/New_York' via MultiPHP INI Editor (section 10 step 2) is presented as covering the app; it does not apply to the CLI binary used by the cron jobs.",
+  "'HTTPS forced by cPanel's Force HTTPS Redirect ... AutoSSL issues the certificate within about an hour of DNS resolving' is fine for a subdomain but is unnecessary work if the app lives under the existing domain, which the design never considers.",
+  "'Stay in Google ... gives you no audit trail ... and no restore path': overstated; Sheets version history exists.",
+  "'Set cPanel cron's email output to ... scripts print to stderr only on error' contradicts the cron lines, which redirect stderr to cron.log.",
+  "'roughly 55-65 hours' for the scope described (13 tables, 11 screens, planner/adoption/ledger sync, audit restore, migrations runner, custom dumper, API, ICS) is an unsupported estimate; it is plausible only for the MVP subset."
+ ],
+ "verdict": "The recommendation is directionally right (plain PHP + MySQL on the existing cPanel, service-account writes to the same five calendars, database as source of truth, triggers off before adoption, fixture-verified balance engine) and its numbers match the workbook exactly. It is not ready to hand to Chris as-is for three reasons: the deployment runbook's first step (document root outside public_html) will likely be refused by cPanel and the simpler /pto/ folder on the existing domain is never offered; the Google acceptance check (accessRole via metadata under the calendar.events scope) cannot work as designed; and the birthday calendar's behaviour is misread (it never deletes today), which both hides a behaviour change and skews the cutover expectations. Add timezone-in-code, a single alert channel that actually delivers, name-change/rehire handling, the exact Apps Script redeploy steps, calendar/project ownership durability, and then cut the scope roughly in half (google_event_id columns instead of a link ledger, mysqldump instead of a PHP dumper, two roles, no ICS/rate-limit/migration runner) so a solo maintainer can build and, more importantly, still understand it in 2030."
+}

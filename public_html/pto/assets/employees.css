@@ -1,0 +1,52 @@
+/* Employees list (employees.php) and employee detail (employee.php). Loaded after app.css
+   (which has .subtabs, .inline-warn, .inline-err, .check). */
+
+/* Live "Last, First" composition */
+.name-preview { margin: .4rem 0 0; font-size: .95rem; }
+.name-preview output { font-weight: 700; }
+.birthday-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.birthday-row > * { flex: 1 1 110px; }
+
+/* Employee header block */
+.emp-head { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; margin-bottom: .4rem; }
+.emp-head h1 { margin: 0; }
+.emp-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem 1.2rem; margin: .4rem 0 .2rem; }
+.emp-meta .k { font-size: .76rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+.emp-meta .v { font-weight: 600; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+
+/* Hire-date change: before/after table per cycle */
+.diff td.changed { background: var(--amber-bg); font-weight: 600; }
+.diff th.before, .diff th.after { border-left: 2px solid var(--line); }
+.diff td.first { border-left: 2px solid var(--line); white-space: nowrap; }
+
+/* Cycle-by-cycle ledger: one <details> per cycle */
+.cycle { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: .6rem; }
+.cycle > summary { cursor: pointer; padding: .55rem .9rem; font-weight: 600; display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; list-style: none; }
+.cycle > summary::-webkit-details-marker { display: none; }
+.cycle > summary::before { content: "\25B8"; color: var(--muted); }
+.cycle[open] > summary::before { content: "\25BE"; }
+.cycle > summary .spacer { flex: 1; }
+.cycle > summary .kind-sum { font-weight: 500; color: var(--muted); white-space: nowrap; }
+.cycle > summary .kind-sum b { color: var(--text); }
+.cycle.current { border-color: var(--primary); }
+.cycle .cycle-body { padding: 0 .9rem .8rem; }
+.cycle .kinds { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: .3rem 0 .6rem; font-size: .92rem; }
+.cycle .adjlist { margin: .2rem 0 .6rem; padding-left: 1.1rem; font-size: .9rem; }
+.cycle table { font-size: .92rem; }
+.cycle .table-wrap { border: 0; }
+.note-after { display: block; font-size: .8rem; color: var(--muted); }
+
+/* Adjustments panel */
+.adj-form .days-row { display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap; }
+.adj-form .days-row > * { flex: 1 1 120px; }
+.adj-form .segmented { margin-top: .2rem; }
+.cycle-preview { margin: .3rem 0 0; font-size: .88rem; color: var(--muted); }
+.cycle-preview b { color: var(--text); }
+td.pos, .pos { color: var(--ok); font-weight: 600; }
+
+/* Departure card */
+.card.depart { border-color: var(--danger-line); }
+.card.depart h2 { margin-top: 0; }
+.card h2:first-child { margin-top: 0; }

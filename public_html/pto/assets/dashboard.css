@@ -1,0 +1,33 @@
+/* Dashboard (dashboard.php): balances table details and the Upcoming section. Loaded after app.css. */
+
+.dash-meta { color: var(--muted); font-size: .9rem; }
+.balances td.cycle, .balances td.next-note { white-space: nowrap; }
+.balances tr.former td { color: var(--muted); }
+.balances tr.former td a { color: var(--muted); }
+
+/* Upcoming: four cards (Today / This week / Next week / Later this month) that wrap on narrow screens. */
+.upcoming { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+.upcoming .card { margin: 0; }
+.upcoming h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.upcoming h3 .range { display: block; font-weight: 400; font-size: .8rem; color: var(--muted); }
+.upcoming ul { list-style: none; margin: 0; padding: 0; }
+.upcoming li { padding: .4rem 0; border-top: 1px solid var(--line); font-size: .92rem; }
+.upcoming li:first-child { border-top: 0; padding-top: 0; }
+.upcoming .when { display: block; font-size: .78rem; color: var(--muted); }
+.upcoming .who { font-weight: 600; }
+.upcoming .what { color: var(--muted); }
+.upcoming .empty { color: var(--muted); font-size: .9rem; margin: 0; }
+/* a thin colour cue per item type on the left edge */
+.upcoming li { border-left: 3px solid transparent; padding-left: .5rem; }
+.upcoming li.up-timeoff { border-left-color: var(--primary); }
+.upcoming li.up-birthday { border-left-color: var(--amber); }
+.upcoming li.up-event { border-left-color: var(--ok); }
+
+/* Calendar sync status strip (sync_status_for_group): green in sync, amber dry-run / stale, red failed. */
+.status-strip.sync { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; border-style: solid; }
+.status-strip.sync .inline-form { margin: 0 0 0 auto; }
+.status-strip.sync > .btn { margin-left: auto; }
+.status-strip.sync .sync-cals { color: inherit; }
+.status-strip.sync-ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
+.status-strip.sync-warn { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-line); }
+.status-strip.sync-err { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line); }

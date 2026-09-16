@@ -1,0 +1,330 @@
+[
+ {
+  "scores": [
+   {
+    "proposal": "Proposal 1: plain-PHP + MySQL, Google Calendars as read-only mirror (operations-first)",
+    "cpanel_fit": 9,
+    "setup_burden": 8,
+    "maintainability_by_one_person": 9,
+    "ux": 7,
+    "rule_fidelity": 8,
+    "calendar_sync_robustness": 7,
+    "migration_safety": 8,
+    "total": 56,
+    "strengths": [
+     "Every server step is a cPanel web-UI click: subdomain with its own docroot, MultiPHP, DB Wizard, File Manager zip-extract, three cron lines. No SSH, Composer, git, Node, mail, or CDN. Research confirms every required extension (pdo_mysql, curl, openssl, mbstring) is in the stock EA4 profile and Composer is no longer bundled with cPanel 130+, so avoiding it is correct, not just preference.",
+     "Matches how Chris already writes tools (one PHP file per screen, no router, no mod_rewrite dependency). ~2,500 lines a PHP-experienced person can read in an afternoon; code is written 8.2-8.5 clean so yearly MultiPHP bumps are a click plus a Self-test.",
+     "Precious/disposable split: pto_data (config, SA key, backups, logs) is a sibling folder never touched by code updates; update = zip, extract, click Apply updates, click Self-test; rollback = extract previous zip.",
+     "Service account + share-with-SA is the research-recommended auth path (no consent state to expire); scope limited to calendar.events; correct fallback ladder (Workspace-Internal OAuth refresh token, then ICS) and it names the org-policy key-creation block explicitly.",
+     "Balance engine is a pure, clock-injected port with the 177-row golden fixture, named edge cases (Saturday-only row, anniversary-day boundary, Feb 29 rollover, pre-hire request), and keeps the Python oracle as a second implementation.",
+     "Migration rehearsal against five throwaway calendars for a week is the single best de-risking idea in any proposal: proves the sync end-to-end without touching the real calendars.",
+     "Pure-PHP nightly dump plus a human-readable JSON export (vendor-neutral exit format); api_hits table answers the unknown-doGet-consumer question empirically instead of guessing.",
+     "Ten-year maintenance calendar is realistic: PHP bump, AutoSSL check, key rotation, mark-as-departed instead of delete."
+    ],
+    "weaknesses": [
+     "Sync still auto-deletes any Google event it does not own (today's semantics), and the mass-delete valve is loose: >20 AND >50%. A half-imported DB or a mistyped calendar ID with fewer than half the events unclaimed would silently delete dozens of events. Proposal 2 uses OR and Proposal 3 never auto-deletes.",
+     "No dry-run/plan preview before the first live run against the real calendars; the only guard is the valve plus the throwaway-calendar rehearsal.",
+     "No guard for an empty desired set (fresh install or wrong DB pointed at real calendars).",
+     "lib/, cron/, tests/ live inside the document root protected only by .htaccess Require all denied; cheaper and safer to make public/ the docroot as Proposals 2 and 3 do (no rewrite needed).",
+     "api.php changes anniversaryDate to YYYY-MM-DD, a gratuitous break of the legacy doGet contract; Proposal 3 keeps the ISO form.",
+     "No email path at all: sync/backup failures are only visible on the dashboard strip, so a week of silent sync failure is possible if nobody logs in (cPanel cron mail is mentioned only as optional).",
+     "Inline sync on every save runs a full list-and-diff of the calendar; fine at ~200 events but adds 1-3 s to every save.",
+     "Birth year discarded entirely, so the four real years are lost (acceptable, but Proposals 2/3 keep them)."
+    ]
+   },
+   {
+    "proposal": "Proposal 2: plain-PHP + MySQL time-off board designed from the office screens backwards (user-first)",
+    "cpanel_fit": 7,
+    "setup_burden": 6,
+    "maintainability_by_one_person": 6,
+    "ux": 9,
+    "rule_fidelity": 8,
+    "calendar_sync_robustness": 7,
+    "migration_safety": 8,
+    "total": 51,
+    "strengths": [
+     "Best admin data-entry flow of the three: employee select autofocused and last-used-first, segmented PTO/Vacation buttons, end date auto-fills to start, live preview sentence, Enter saves, form resets keeping the employee, 10-second Undo toast.",
+     "Who's Out cards (today/this week/next week) and upcoming birthdays/holidays/closings on the landing page; Balances view with progress bars and This year / Next year toggle.",
+     "Sync state machine per mirror row (pending/synced/delete_pending/error, attempts, backoff to 6 h), Dry run button that prints the create/update/delete plan, per-calendar sync toggles, OR-style guard (>25 events OR >20%) with email on abort, adopt-first run that only rewrites the 4 lowercase 'vacation' titles and the one trailing-space factory title (both verified in the data).",
+     "Importer's --compare-url diffs the new balances against the live doGet JSON automatically, and the birth-year rule (keep only years < 2023) is exactly right for the actual data.",
+     "'Copy last year's events to next year' for the fixed holidays is a small feature that saves the office manager real time every January.",
+     "Correct on Feb 29, DATE-only columns, America/New_York fixed in config, ea-php82 binary pinned for cron."
+    ],
+    "weaknesses": [
+     "Preferred deploy path (cPanel Git Version Control cloning a private GitHub repo over HTTPS with a PAT) was not verified by the research; cPanel's Git interface generally needs SSH for private repositories, and the research shows shell access is per-account and may be jailed or disabled. The zip fallback works, but a GitHub account, PAT, and .cpanel.yml are extra moving parts for one maintainer.",
+     "Every employee gets a login (invites via PHP mail(), remember-me tokens, forgot-password links, 15 accounts to support). Research flags shared-host mail landing in spam; Proposal 1 avoids email entirely and Proposal 3 uses admin-issued links. This is the largest long-term support burden in any proposal and mostly duplicates what the shared Google Calendars already give staff.",
+     "Fallback if the service-account path is blocked is 'keep the ICS feed', which the research rates unsuitable as the primary sync (12-24 h refresh, no manual refresh, per-user resubscription). No Workspace-Internal OAuth fallback is named.",
+     "Requests scope https://www.googleapis.com/auth/calendar (full) rather than calendar.events; works, but more privilege than needed.",
+     "Scope creep for a solo maintainer: month-grid Office Calendar, agenda view, PWA manifest and icons, My Time Off, invites, remember-me, undo, audit UI, git deploy. The 45-hour estimate is optimistic for that list.",
+     "Type stored lowercase ('pto','vacation') so every calendar title and display needs a mapping back to the sheet's casing; small, but a place for drift.",
+     "Soft-delete rows plus strict mirror means deleted_at handling must be threaded through every query; more surface for a subtle balance bug than Proposal 1's hard delete with audit snapshot."
+    ]
+   },
+   {
+    "proposal": "Proposal 3: correctness-first PHP 8.2 / MySQL replacement with ledger-based calendar sync",
+    "cpanel_fit": 8,
+    "setup_burden": 6,
+    "maintainability_by_one_person": 7,
+    "ux": 7,
+    "rule_fidelity": 9,
+    "calendar_sync_robustness": 9,
+    "migration_safety": 9,
+    "total": 55,
+    "strengths": [
+     "Only proposal that actually read the sync code closely enough to find the real defect: the delete pass compares the sheet's inclusive end date with getEndTime() (exclusive next-day midnight for all-day events), so the current script deletes and recreates every event on every run. Verified at appsscript_Code.gs lines 379-385/397. This correctly informs the adopt strategy and explains why the current calendars never have stable event IDs.",
+     "Ledger-based sync that never deletes unmanaged Google events automatically; unmanaged items are listed for adopt-or-explicit-delete. Plus an abort-if-desired-set-empty guard, a plan-hash review for deletes over max(5, 10%), sync_mode dry_run default until migration is signed off, per-call transactional ledger updates so a crash mid-run resumes cleanly, and privateExtendedProperty lookup to rebuild links from Google alone.",
+     "Migration verification gate runs inside the import transaction and rolls back on any of the 177-row or 15-balance mismatches; legacy_row on every imported row; Apps Script Executions log checked for doGet consumers before cutover; API keeps anniversaryDate in the legacy ISO form.",
+     "Hire-date edit shows a before/after balance diff before saving; nightly balance_snapshots with ENGINE_VERSION make any silent change to a past cycle visible; rules changes become a new engine version whose historical effect is shown before enabling.",
+     "Least-privilege scope calendar.events; secrets (config, SA key, my.cnf) outside the docroot at 600; sessions in a private directory; additive-only migrations so an older release runs against a newer schema; maintenance flag for updates.",
+     "Names both Workspace prerequisites the research found (external sharing for secondary calendars, and a Workspace-Internal OAuth fallback with the same CalendarClient interface).",
+     "Birth-year rule (null when >= 2023) exactly matches the data: eight 2023 and three 2026 placeholders nulled, 1972/2003/2006/2003 kept."
+    ],
+    "weaknesses": [
+     "Heaviest process for a part-time solo maintainer: dry-run mode, adopt pass, plan-hash approvals, a 1-2 week parallel run with double entry and nightly drag-and-drop verification, four cron lines, my.cnf for mysqldump, maintenance flag, quarterly restore drill. Estimated ~10 focused days (roughly 80 h) versus 50-60 h for Proposal 1.",
+     "Most state to understand: hand-rolled kernel, calendar_links state machine, sync_runs.plan_json, balance_snapshots, soft-delete-with-reason on every table, audit in every transaction. All defensible, but it is the largest codebase to hold in one head in year six.",
+     "Never-auto-delete creates a new standing chore: anything staff add directly in Google accumulates as 'unmanaged' until a human reviews it (today it is silently purged).",
+     "Stores working_days on each request and then needs a nightly job to re-verify it against the engine; a self-inflicted denormalization Proposals 1 and 2 avoid by never storing computed values.",
+     "MySQL/MariaDB divergences baked into the schema (utf8mb4_0900_ai_ci vs unicode_ci, JSON column type, STORED generated column) mean the migration SQL has to know which engine Liquid Web provisioned; Proposal 1 deliberately uses only the common subset.",
+     "PASSWORD_ARGON2ID availability on EA4 PHP builds is not guaranteed (falls back to bcrypt, so harmless, but another conditional).",
+     "Warnings require explicit confirm checkboxes (zero working days, overlap, negative), which adds friction to the office manager's most frequent task compared with Proposals 1 and 2's non-blocking warnings.",
+     "Relies on PHP mail() for failure alerts (secondary channel, acknowledged), and mysqldump on the cron PATH (has a PDO fallback)."
+    ]
+   }
+  ],
+  "winner": "Proposal 1: plain-PHP + MySQL on cPanel, Google Calendars kept as a read-only mirror (operations-first)",
+  "graft": [
+   "From Proposal 3: never auto-delete unmanaged Google events. Keep Proposal 1's link table and fingerprint adoption, but treat any remote event with no link as UNMANAGED: list it on the Admin > Calendars page with 'adopt as...' / explicit-delete checkboxes instead of deleting it. This removes the single biggest way a misconfiguration destroys calendar history and costs about 30 lines.",
+   "From Proposal 3: add an abort-if-desired-set-is-empty guard for the PTO and birthday calendars, and from Proposal 2 change the mass-delete valve to OR (more than 25 events OR more than 20% of the calendar) instead of AND. Both are one-line conditions in sync_calendar().",
+   "From Proposal 2 and 3: a 'Dry run / Preview plan' button on Admin > Calendars that prints the create/patch/delete list without calling Google, and a sync_mode = dry_run setting that is on by default until Chris flips it after the throwaway-calendar rehearsal.",
+   "From Proposal 3: run the import's self-test inside the import transaction and roll back on any of the 177-row or 15-balance mismatches, rather than importing first and verifying afterwards. Record legacy_row (sheet row number) on every imported time_off and events row.",
+   "From Proposal 3: keep api.php byte-compatible with doGet, including anniversaryDate in the legacy ISO timestamp form; and check Apps Script > Executions for doGet calls over the last 90 days before cutover (in addition to api_hits).",
+   "From Proposals 2 and 3: make pto_web/public the subdomain's document root and keep lib/, cron/, tests/ as siblings above it. Proposal 1's file-per-screen style still works (public/requests.php requires ../lib/bootstrap.php) and no .htaccess deny rules or mod_rewrite are needed.",
+   "From Proposal 3: on the employee edit form, when hire_date changes, show a before/after table of that employee's balances for every cycle and require confirmation; log old/new in audit_log. Hire-date edits are the one field that silently rewrites payroll history.",
+   "From Proposal 2: the 10-second add form details: employee select autofocused with last-used employee first, PTO/Vacation as two large segmented buttons, Enter submits, and after save the form resets but keeps the employee so several single days can be entered in a row.",
+   "From Proposal 2: 'Copy last year's events to <next year>' on the holidays tab, and an 'Upcoming' strip on the dashboard grouped Today / This week / Next week (Proposal 1 already has a 30-day 'Coming up' list; regroup it).",
+   "From Proposal 2: --compare-url on the verify tool that fetches the live doGet JSON and diffs it against api.php output automatically, as a second acceptance check beside the fixture.",
+   "From Proposals 2 and 3: keep birth_year as a nullable column populated only when the sheet's year is < 2023 (keeps 1972/2003/2006/2003, nulls the eight 2023 and three 2026 placeholders); never display it as an age. Costs nothing and avoids discarding real data.",
+   "From Proposal 3: one alert email (via PHP mail() or cPanel cron's 'email output' setting) after 3 consecutive sync failures or when the nightly backup is older than 36 h, rate-limited to once a day. Proposal 1's dashboard strip is otherwise the only signal and requires someone to log in.",
+   "From Proposal 3: add ENGINE_VERSION to lib/balance.php and stamp it into the nightly JSON export, so a future tier change is visibly versioned; a full balance_snapshots table is optional.",
+   "From Proposal 2: per-calendar sync_enabled toggle on Admin > Calendars (Proposal 1 has is_active for navigation; make sync opt-out separate so the stale 'sales' calendar can be frozen without deleting its history).",
+   "From the research, not a proposal: if the Workspace org policy blocks service-account key creation and the admin will not override it, the zero-console fallback is an Apps Script doPost bridge that reuses the existing CalendarApp code (curl with CURLOPT_FOLLOWLOCATION and a shared secret), which is simpler than the OAuth refresh-token path Proposal 1 lists second."
+  ],
+  "rationale": "Scoring basis. I read appsscript_Code.gs and checked the workbook dump before scoring. All three proposals are technically honest about the cPanel side: plain PHP 8.x, PDO/MySQL, cPanel cron, no Composer (correct, since cPanel 130+ removed it), no Node/Python (correct, since those need root-side Passenger/CloudLinux work), service account + calendar sharing for Google (the research's primary recommendation, with no consent state to expire). Their data claims all check out: 4 lowercase 'vacation' rows, one trailing-space factory title, eight 2023 plus three 2026 placeholder birth years, 69 cross-employee same-type overlapping requests. Proposal 3 additionally found a real defect in the current script (the delete pass compares an inclusive sheet end date to the exclusive all-day end time, so every trigger run deletes and recreates every event), which I confirmed at lines 379-385 and 397; this is why exact title+date adoption is safe for all three and why nothing today depends on stable event IDs.\n\nWhy Proposal 1 wins. The brief says to weigh setup burden and maintainability-by-one-person heavily, and on those two criteria Proposal 1 scores 17 of 20 against 13 for Proposal 3 and 12 for Proposal 2. It is the only design that looks like the tools Chris already maintains (one file per screen, no router, no rewrite rules, no email, no git on the server), keeps the precious data folder physically separate from the disposable code folder, has a zip-extract update path with a zip-extract rollback, writes a pure-PHP nightly dump plus a JSON exit format, and explicitly plans the year-six chores (PHP bump, cron path, key rotation, Self-test). Its throwaway-calendar rehearsal is the best single migration-safety idea across the three. It also names the correct fallback ladder for the two Workspace gotchas the research found (key-creation org policy and external sharing of secondary calendars), whereas Proposal 2's only fallback is ICS, which the research rates unfit as a primary sync.\n\nWhere Proposal 1 is weaker, the fixes are cheap grafts. Its calendar sync is the least defensive of the three: it still auto-deletes unmanaged events with a loose AND-style valve and no dry run. Proposal 3's never-auto-delete ledger policy, empty-desired guard and plan preview, and Proposal 2's OR-style threshold, close that gap in well under 100 lines without changing the architecture. Its import verifies after committing rather than gating the transaction; Proposal 3's rollback-on-mismatch gate is a small restructuring. Its API needlessly changes the anniversaryDate format; keep the legacy form.\n\nWhy not Proposal 3. It is the most correct design and would be my pick for a team with an operations person: ledger sync that cannot destroy history, verification gate, hire-date diff, drift snapshots, least privilege everywhere. But for one part-time maintainer it is the heaviest thing to own: roughly 80 hours to build, a hand-rolled kernel, a sync state machine, soft-delete-with-reason on every table, nightly snapshot and working-days re-verification jobs (the latter needed only because it denormalizes working_days), four cron lines with mysqldump and my.cnf, MySQL-vs-MariaDB schema divergences, and a new standing chore of reviewing unmanaged events. Its 1-2 week double-entry parallel run is prudent but is real burden on the office manager. Most of its guarantees can be lifted into Proposal 1 as targeted additions.\n\nWhy not Proposal 2. It has the best screens, especially the 10-second add form, and I graft those. But it is penalized on the research findings: its preferred deploy path (cPanel Git cloning a private GitHub repo over HTTPS with a PAT) is unverified and cPanel's Git tool generally needs SSH for private repos, which the research shows is per-account and may be jailed or disabled; its staff-login model (15 accounts, mail() invites, remember-me tokens, forgot-password) adds the largest ongoing support load of any proposal and mostly duplicates what the shared Google Calendars already give staff; its fallback for a blocked service account is ICS only; and its feature list (month-grid calendar, agenda view, PWA, undo, invites) makes the 45-hour estimate the least credible of the three.\n\nNet: build Proposal 1, with Proposal 3's sync safety rules and import gate and Proposal 2's entry-form ergonomics grafted in. The result stays a ~3,000-line plain-PHP app that runs on a stock cPanel account with three cron lines and one service-account key, which is what Chris asked for and what he can still fix alone in 2036."
+ },
+ {
+  "scores": [
+   {
+    "proposal": "Proposal 1: LSP Time Off, plain-PHP + MySQL, operations-first",
+    "cpanel_fit": 9,
+    "setup_burden": 7,
+    "maintainability_by_one_person": 9,
+    "ux": 6,
+    "rule_fidelity": 8,
+    "calendar_sync_robustness": 7,
+    "migration_safety": 7,
+    "total": 53,
+    "strengths": [
+     "Closest to how Chris already builds tools: one PHP file per screen, no router, no .htaccess rewrites, no CDN, no Composer; ~2,500 lines a PHP freelancer can read in an afternoon.",
+     "Cleanest cPanel footprint of the three: subdomain with its own docroot, Force-HTTPS toggle from the Domains page, sibling pto_data folder that zip-extract updates can never touch, pinned ea-php binary in cron, PHP_VERSION printed into cron.log so a wrong-binary mistake is visible.",
+     "Portable SQL by rule (TEXT instead of JSON type, no generated columns) so MariaDB and MySQL behave identically; GET_LOCK prevents cron/inline sync overlap.",
+     "Nightly pure-PHP backup (.sql.gz plus plain JSON as a ten-year exit format) with no exec()/mysqldump dependency; dashboard goes red if the last backup is over 48 h old.",
+     "api_hits table logs every call to the legacy JSON endpoint so the unknown doGet consumer identifies itself; retire after six quiet months.",
+     "Correctly notes the Workspace fallback (OAuth refresh token for an Internal app does not expire) if service-account key creation is blocked, matching the research.",
+     "Throwaway-calendar rehearsal week before touching the five real calendars; Python oracle kept in tools/ as a second implementation of the rules.",
+     "Fast data entry: end date auto-fills, live balance preview, warnings are non-blocking exactly like the sheet, inline sync with an honest 'Calendar updated' vs 'will update within 15 minutes' message.",
+     "Ten-year maintenance calendar (yearly MultiPHP bump + self-test + cron path; SA key rotation) written into README."
+    ],
+    "weaknesses": [
+     "Weakest for the employee-lookup persona: no 'my balance' view; the only staff option is a viewer role that sees every employee's balances; no phone-first layout; 'most staff never log in' is the stated design.",
+     "No dry-run mode for the sync; the mass-delete safety valve requires BOTH >20 events AND >50% of the calendar, so a 40% wipe would go through.",
+     "Deletes any unmanaged Google event automatically (same as today), so a hand-added calendar entry silently disappears at 03:05.",
+     "Verification runs after the import commits rather than as a gate that rolls back; birth years are discarded outright, losing the four real ones (1972/2003/2006/2003).",
+     "Does not mention the Workspace admin setting for external sharing of secondary calendars, which the research flags as the likeliest first-day failure.",
+     "Assumes ea-php84 is available; the research shows the default EA4 profile ships 81/82, so adding 83/84 is a WHM root click (Chris has WHM on a Liquid Web VPS, but it is a server-end step). Hedged, so a minor ding.",
+     "Cron and inline sync share strict-mirror semantics with no per-item error state, so one bad row can stall a whole calendar's run."
+    ]
+   },
+   {
+    "proposal": "Proposal 2: LSP Time Off, plain-PHP + MySQL, user-first (designed from the office screens backwards)",
+    "cpanel_fit": 8,
+    "setup_burden": 7,
+    "maintainability_by_one_person": 7,
+    "ux": 9,
+    "rule_fidelity": 8,
+    "calendar_sync_robustness": 7,
+    "migration_safety": 8,
+    "total": 54,
+    "strengths": [
+     "The 10-second entry screen: employee select autofocused with last-used first, PTO|Vacation segmented buttons, end date auto-fills, live 'Nikki will have 13 of 15 Vacation left (year Aug 10, 2026 - Aug 9, 2027)' preview, Enter saves, toast with 10-second Undo, form resets keeping the employee for batch entry.",
+     "Clearest balance display: 'PTO 2 of 3 left' with progress bars, 'resets Mar 8, 2027', next anniversary in N days, This year / Next year toggle, sort by days left, print and CSV.",
+     "Serves the employees directly: Who's Out home (Today / This week / Next week + birthdays, holidays, factory closings), My Time Off page with a My Balance card, PWA add-to-home-screen, 60-day Remember me so phones rarely see the login.",
+     "Office Calendar month grid with per-calendar filters doubles as the sync sanity check; 'Copy last year's events to 2027' for fixed holidays.",
+     "Keeps the four real birth years and nulls the 2023/2026 placeholders; lowercase types normalized; expected adopt counts (177 time-off, 30 birthdays, 43 events, 5 retitles) are correct against the data.",
+     "verify.php --compare-url diffs the new balances against the live doGet JSON automatically; one pay period side-by-side before cutover.",
+     "Mirror table with per-item state (pending/synced/delete_pending/error), attempts and capped backoff, Dry run button, adopt-first run, email after 3 consecutive failures, delete guard (>25 events OR >20%).",
+     "No php.ini edits required; zip upload is the documented fallback to Git deploy."
+    ],
+    "weaknesses": [
+     "No lock between the inline push and the 15-minute cron, so overlapping runs can double-insert a pending row.",
+     "Requests the full https://www.googleapis.com/auth/calendar scope where calendar.events is sufficient (research: least privilege, cannot alter sharing).",
+     "If the Workspace admin blocks service-account sharing or key creation, the stated fallback is ICS feeds, which the research rates unsuitable as the primary sync (12-24 h refresh, per-user subscriptions); no Internal-OAuth fallback and no mention of the org-policy key-creation block.",
+     "Preferred deploy via cPanel Git Version Control adds a GitHub repo + personal access token dependency that the research did not verify on this host (zip fallback exists).",
+     "Invites and forgot-password ride on PHP mail(), which the research flags as spam-prone from shared hosts (admin temp-password fallback exists, but 15 onboarding emails is the first thing staff will see).",
+     "Largest UX surface for one maintainer: invites, remember-me tokens, login_attempts, PWA, month grid, ~3,000 lines; more code than P1 for the same rules.",
+     "Import verification is a separate step, not a transactional gate that rolls back on mismatch; nightly full sync still auto-deletes unmanaged Google events.",
+     "'12 of 15 birth years are placeholders' is off by one (11), harmless but shows lighter data checking than P3."
+    ]
+   },
+   {
+    "proposal": "Proposal 3: LSP Time Off, correctness-first PHP 8.2 / MySQL",
+    "cpanel_fit": 8,
+    "setup_burden": 6,
+    "maintainability_by_one_person": 6,
+    "ux": 7,
+    "rule_fidelity": 9,
+    "calendar_sync_robustness": 9,
+    "migration_safety": 9,
+    "total": 54,
+    "strengths": [
+     "Only proposal that read the old script correctly: its delete pass compares an inclusive sheet end date to the exclusive all-day end time, so every run deletes and recreates every event (verified at Code.gs lines 375-386 / 315-326); the 69 cross-employee overlapping same-type pairs it cites are exact.",
+     "Ledger-based sync that never auto-deletes unmanaged Google events (they are listed for adopt or explicit tick-to-delete), stored plan_json, plan-hash 'I reviewed this plan' approval for large deletes, flock against overlapping runs, per-call commits so a crash resumes cleanly, privateExtendedProperty lookup before insert to prevent duplicates after a lost response, abort if the desired set is empty, sync_mode defaults to dry_run.",
+     "Least-privilege calendar.events scope and the right fallback per research: an Internal-audience OAuth client (no 7-day expiry) behind the same CalendarClient interface; names the Workspace secondary-calendar external-sharing setting as a day-one check.",
+     "Migration behind a verification gate inside one transaction: 177/177 E/F, 15 current balances, per-employee counts and allotment columns must match or the import rolls back; CONCAT(last, ', ', first) asserted to round-trip byte-for-byte; unknown names fatal; misfiled 2023 rows on the Factory sheet flagged rather than moved.",
+     "1-2 week parallel run with nightly re-verification against a fresh export, explicit cutover order (adopt in dry run, then disable triggers, then go live), Apps Script Executions log checked for doGet callers.",
+     "Pure BalanceEngine with ENGINE_VERSION, edge tests including adjustments at cycle boundaries and Feb 29, id order preserving the script's row-index tie-break, nightly recheck of stored working days.",
+     "Hire-date edit shows a before/after balance diff and requires confirmation; adjustments require a reason; 'as of' date override on the dashboard; additive-only migrations; quarterly restore drill written down; alert digest only when something is wrong."
+    ],
+    "weaknesses": [
+     "Heaviest concept load for a solo part-time maintainer: micro-kernel, soft delete on every business table (every query must filter deleted_at), audit on everything, balance_snapshots drift detection, ledger state machine, plan hashes, maintenance flag, releases directory; ~10 focused days versus 6-8 for the others.",
+     "UX friction baked into the lens: warnings need explicit confirm checkboxes, every delete needs a typed reason, 'Save' leaves the calendar up to 15 minutes stale unless the office manager remembers 'Save and sync now', the dashboard is a wide many-column table rather than phone-first, no undo, no last-used employee.",
+     "Stores working_days on each request (denormalized) and then needs a nightly job to police it; P1/P2 simply never store it.",
+     "The delete guard of max(5, 10% of ledger) will trip every January when 15 prior-year birthday events expire against a 30-row birthday ledger, forcing a manual plan approval each year.",
+     "Most server prerequisites: my.cnf for mysqldump, custom session save path, four cron lines, more INI edits, releases folder (all standard cPanel, but more steps than P1/P2).",
+     "Minor research mismatch: the secondary-calendar external-sharing setting lives under Calendar > General, not Sharing settings; does not name the org-policy key-creation block (its OAuth fallback happens to cover it).",
+     "Employee self-service is possible (viewer linked to employee_id) but onboarding is hand-delivered one-time reset links, and the design explicitly treats the Google Calendars as the primary staff channel."
+    ]
+   }
+  ],
+  "winner": "Proposal 2: LSP Time Off, plain-PHP + MySQL, user-first (designed from the office screens backwards)",
+  "graft": [
+   "From P3: sync ledger semantics \u2014 never auto-delete Google events the ledger does not own; list unmanaged events on the sync page with 'adopt as\u2026' or explicit tick-to-delete; only delete what the app created. Because the old script recreates every event every run, expect exact title+date matches on adoption and treat anything else as unmanaged for Chris to review.",
+   "From P3: ship with sync_mode = dry_run and store the full plan (create/update/delete) per run; require a plan-hash 'I reviewed this plan' approval for deletes over max(5, 10% of the calendar's ledger) \u2014 but exempt expired prior-year birthday events from the count so the January rollover does not trip it.",
+   "From P3 (or P1's GET_LOCK): a flock/DB lock so the 15-minute cron and the inline push after Save never overlap; commit each ledger row immediately after its API call so a crash mid-run resumes cleanly; before any insert, query events.list?privateExtendedProperty=lsp_key=\u2026 to recover an insert whose response was lost; abort the run if the desired set for time_off or birthdays is empty.",
+   "From P3: request only https://www.googleapis.com/auth/calendar.events, and make the fallback an Internal-audience OAuth client (refresh token stored outside the web root, prompt=consent, no 7-day expiry) behind the same CalendarClient interface \u2014 not ICS feeds. Add the two day-one checks: Workspace Admin console > Apps > Google Workspace > Calendar > General must allow outsiders to change secondary calendars, and the org policy iam.managed.disableServiceAccountKeyCreation must be lifted for the project (or use the OAuth fallback).",
+   "From P3: wrap the sheet import and its verification in one transaction that rolls back on any mismatch (177/177 stored E/F values, 15 current balances, per-employee row counts, allotment columns D/E); assert CONCAT(last_name, ', ', first_name) round-trips byte-for-byte; unknown names are fatal; keep legacy_row; write a migration report file.",
+   "From P3: a 1-2 week parallel run where /admin/selftest accepts a fresh CSV/XLSX export each evening and must print 0 mismatches; cutover order is adopt (dry run) \u2192 delete every Apps Script time-driven trigger \u2192 set sync live; check Apps Script > Executions for doGet callers over the previous 90 days before deciding whether the proxy is needed.",
+   "From P3: hire-date edits show a before/after balance diff and require confirmation; adjustments require a typed reason; an 'as of' date override on the Balances page; an ENGINE_VERSION constant in Balance.php; additive-only migrations; a quarterly restore drill written into README. Skip the balance_snapshots table \u2014 a nightly self-test that emails only on failure covers the same risk with far less code.",
+   "From P1: keep the disposable-code / precious-data split (config, SA key, backups, logs in a sibling folder the zip extract never touches) and a nightly pure-PHP backup (no exec/mysqldump dependency) writing .sql.gz plus a plain JSON export of employees/time_off/adjustments/events as the ten-year exit format; turn the admin banner red when the last backup is older than 48 h.",
+   "From P1: an api_hits table that logs every call to /api/balances.json (and the Apps Script doGet proxy) so the unknown consumer identifies itself; drop the endpoint after six quiet months.",
+   "From P1: rehearse the sync for a week against five throwaway Google Calendars before pasting in the real IDs; cron scripts print PHP_VERSION and a run summary to the log; README carries the ten-year maintenance calendar (yearly MultiPHP bump + self-test + cron path edit; SA key rotation every two years).",
+   "From P1: keep the sheet's exact 'After MM/DD/YYYY: N PTO / N Vac' wording as the secondary line under P2's 'resets Mar 8, 2027' so the office manager sees the phrasing she already knows; keep warnings non-blocking (P2 already does) rather than P3's confirm checkboxes.",
+   "From P1: portability rules when adopting P3's ledger and plan storage \u2014 TEXT columns for JSON blobs, no JSON column type, no generated columns, so XAMPP MariaDB and the server's MySQL/MariaDB behave identically; declare(strict_types=1) and 8.2-8.5-clean code so yearly MultiPHP bumps are a non-event; password_needs_rehash on login; session_name('lsp_pto') and a private session save path.",
+   "From P1: keep the Python re-implementation in tools/ as an independent second oracle of the rules for the next time a balance is questioned.",
+   "From P3: make P2's Git-deploy optional and document the zip-extract path as primary (no GitHub/PAT dependency); replace P2's mail()-based invites as the default with P3's hand-delivered one-time reset links (mail remains an optional convenience) so onboarding does not depend on Exim deliverability."
+  ],
+  "rationale": "Scoring as the office manager who will enter roughly four requests a week for ten years and as the employees who want one number on a phone. All three proposals converge on the same stack the research endorses (plain PHP 8.x, PDO/MySQL from the cPanel wizard, File Manager upload, pinned ea-php cron, hand-rolled RS256 JWT + curl to a service account, no Composer), and all three port the six Apps Script functions with a 177/177 golden fixture, so cpanel_fit and rule_fidelity are close. They separate on lens. Proposal 1 is the easiest for Chris to keep alive (no router, no rewrites, sibling data folder, portable SQL, runbook) but treats employees as non-users: no 'my balance', viewers see everyone, no phone-first layout. Proposal 3 is the most correct system on paper \u2014 it is the only one that noticed the old script deletes and recreates every event on every run (verified in Code.gs), its ledger never silently deletes calendar history, its migration rolls back on any mismatch, and its Internal-OAuth fallback and calendar.events scope match the research exactly \u2014 but that correctness is bought with the heaviest concept load for a solo maintainer (soft delete everywhere, snapshots, plan hashes) and with daily friction the office manager will feel (confirm checkboxes, typed delete reasons, a second 'Save and sync now' button, a wide admin-style table). Proposal 2 is the only one designed from the two screens that matter: a 10-second entry form with last-used employee, Enter-to-save and Undo; a balance display that reads 'PTO 2 of 3 left, resets Mar 8, 2027'; a Who's Out home page and a My Balance card that staff can pin to a phone with Remember me. Research-based penalties applied: P2 loses points for a weak fallback (ICS, which the research rates unsuitable as primary sync), the over-broad full calendar scope, no run lock, mail()-dependent onboarding and an unverified Git-deploy preference; P1 for assuming ea-php84 and omitting the Workspace secondary-calendar sharing check; P3 for extra server prerequisites and a minor admin-console path error. None chose the research's zero-console Apps Script doPost bridge; it remains a sensible last-resort fallback if Cloud console work is blocked, since all three keep the Apps Script alive as a doGet proxy anyway. On the unweighted sum P2 and P3 tie at 54 with P1 at 53; applying the instructed heavy weight on usability, entry speed and balance clarity \u2014 daily concerns for a decade \u2014 breaks the tie for P2. That is also the practical choice for the final design: P2's gaps are modules (sync ledger rules, lock, scope, OAuth fallback, transactional import gate, parallel-run verification) that lift cleanly from P3 and P1, whereas P3's friction and P1's staff-are-not-users stance are baked into their lenses. Build on P2's screens and mirror table, harden the sync and migration with P3, and simplify operations with P1."
+ },
+ {
+  "scores": [
+   {
+    "proposal": "Proposal 1: LSP Time Off, plain-PHP + MySQL, Google Calendars as read-only mirror (operations-first)",
+    "cpanel_fit": 9,
+    "setup_burden": 9,
+    "maintainability_by_one_person": 9,
+    "ux": 6,
+    "rule_fidelity": 9,
+    "calendar_sync_robustness": 7,
+    "migration_safety": 7,
+    "total": 56,
+    "strengths": [
+     "Smallest server footprint of the three: no rewrites, no front controller, no email, no git; three cron lines, setup.php, zip-and-extract updates; matches how Chris already writes XAMPP tools.",
+     "Correct cutover order: Apps Script triggers are deleted before the first sync, and adoption is by fingerprint on every sync, so it is not hurt by the old script's delete-and-recreate-every-run behavior (verified in Code.gs lines 379-386).",
+     "Engine is a pure function of ($employee, $requests, $adjustments, $today) with the 177-row fixture, the 15 balances, explicit edge cases (Saturday-only row, anniversary-day boundary, Feb 29), and keeps the Python oracle in tools/ as a second independent check.",
+     "Uses the calendar.events scope, service account without domain-wide delegation, token cache, extendedProperties marker, GET_LOCK against overlapping runs, 404-drops-link self-healing, dirty flags with inline + 15-minute + nightly passes.",
+     "Backups have three layers, a pure-PHP dump that does not depend on exec()/mysqldump, a restore drill written into README, and a ten-year maintenance calendar (PHP bump, AutoSSL, key rotation).",
+     "api_hits table answers the unknown-doGet-consumer question empirically instead of by guesswork."
+    ],
+    "weaknesses": [
+     "Mass-delete safety valve is AND-ed (>20 events AND >50% of the calendar): deleting 100 of 250 events (40%) would pass silently; this is the weakest guard of the three for a strict mirror that auto-deletes every unlinked event.",
+     "Hard-deletes time_off rows (restore comes from the audit snapshot), and the cutover re-import with 'replace all' discards the app's own week of audit history; verification runs after commit rather than as a rollback gate.",
+     "Targets ea-php84 by default; research shows the stock EA4 profile ships ea-php81/82 and newer versions need a root click in WHM. The 8.2-clean code and the 'use 83 if absent' note keep this survivable but the runbook should start from 8.2.",
+     "Does not mention the Workspace Admin console setting for external sharing of secondary calendars (the service account is an outsider); only the key-creation org policy is called out.",
+     "Misreads the birthday data (says the six 2026 hires have real years; three do, three have 2026 placeholders, and Walker J's 1972 is real) and then discards the four real years entirely; harmless for the calendar but a small data loss.",
+     "Weakest UX: no month grid, no who's-out landing page, no phone-first layout, no undo; api.php changes anniversaryDate to YYYY-MM-DD while the other two keep the legacy ISO form.",
+     "App code lives inside the document root guarded by .htaccess 'Require all denied' files, which works on cPanel but is a weaker posture than the above-docroot layouts of Proposals 2 and 3."
+    ]
+   },
+   {
+    "proposal": "Proposal 2: LSP Time Off, plain-PHP + MySQL time-off board designed from the office screens backwards (user-first)",
+    "cpanel_fit": 8,
+    "setup_burden": 7,
+    "maintainability_by_one_person": 7,
+    "ux": 9,
+    "rule_fidelity": 8,
+    "calendar_sync_robustness": 7,
+    "migration_safety": 6,
+    "total": 52,
+    "strengths": [
+     "Best day-to-day UX by a wide margin: 10-second entry flow (autofocused employee select, last-used first, segmented PTO/Vacation buttons, end date auto-fill, Enter to save, form resets keeping the employee), 10-second Undo toast, Who's Out landing page, month grid with per-calendar colors and filters, PWA add-to-home-screen, 'Copy last year's events'.",
+     "calendar_mirror state machine (pending/synced/delete_pending/error) with attempts, backoff capped at 6 h, email after 3 consecutive failures, per-calendar sync toggles, and a dry-run planner; guard is >25 events OR 20% (stricter than Proposal 1).",
+     "Engine port keeps the script's function names, ships the fixture, and adds a --compare-url diff against the live doGet output, which is the cheapest possible parity check during the parallel run.",
+     "Birth-year rule (keep year < 2023) yields the correct result: 11 placeholders nulled, four real years kept.",
+     "Code above the document root, config gitignored, legacy JSON contract preserved key-for-key, Apps Script doGet left as a proxy."
+    ],
+    "weaknesses": [
+     "Requests the full https://www.googleapis.com/auth/calendar scope; research confirms calendar.events is sufficient and least-privilege. Not a failure, but unnecessary privilege for a key sitting on a web host.",
+     "Adopt run (migration step 5) happens while the sheet still drives the calendars (step 6). Because the old script deletes and recreates every event on every trigger run, every recorded google_event_id is stale by cutover; the first full sync then sees ~250 unknown events, trips the guard, and needs --force and a full churn. The end state is correct but the sequence is wrong: triggers must be disabled before adoption.",
+     "Fallback if the Workspace admin blocks sharing with the service account is the ICS feed, which research shows refreshes only every 12-24 h with no manual refresh; Proposal 3's Internal-OAuth fallback is the correct answer.",
+     "Depends on PHP mail() through Exim for invites and forgot-password for up to 15 staff logins; spam-foldered invites become an admin chore. Temporary-password fallback exists but the design leans on email.",
+     "No transactional verification gate on import, no explicit restore drill, no nightly drift detection; 'verify then trust' rather than 'refuse on mismatch'.",
+     "Scope creep for one maintainer: staff accounts, invite tokens, remember-me tokens, login_attempts, PWA, month grid, git deploy, plus 'about 6 days' is optimistic for ~3,000 lines and 12 screens.",
+     "Minor data sloppiness: says 12 of 15 birth years are placeholders (it is 11) while correctly listing the four real ones."
+    ]
+   },
+   {
+    "proposal": "Proposal 3: LSP Time Off, correctness-first PHP 8.2 / MySQL replacement with ledger-based sync (correctness-and-risk-first)",
+    "cpanel_fit": 8,
+    "setup_burden": 7,
+    "maintainability_by_one_person": 7,
+    "ux": 7,
+    "rule_fidelity": 10,
+    "calendar_sync_robustness": 9,
+    "migration_safety": 9,
+    "total": 57,
+    "strengths": [
+     "Only proposal that read Code.gs closely enough to find the real defect: the delete pass compares the inclusive sheet end date to the exclusive getEndTime(), so every run deletes and recreates every event. I verified this at lines 319-326 and 379-386. Its ledger design is built to never repeat that failure mode.",
+     "Strongest sync safety: calendar_links ledger with states, per-call mini-transactions so a crash resumes cleanly, privateExtendedProperty lookup before every create (no duplicates on a lost response), unmanaged events are never auto-deleted, guard is max(5, 10% of ledger) with per-plan-hash admin approval, abort if the desired set is empty, sync_mode dry-run gate, flock, 1-16 s backoff, error_count cap, banner after 2 h, email after 3 failures.",
+     "Correct Google prerequisites per the research: calendar.events scope, checks the Admin console external-sharing setting for secondary calendars on day one, and falls back to an Internal OAuth app (no 7-day refresh-token expiry) rather than to ICS.",
+     "Rule fidelity apparatus is the deepest: documented function correspondence, id preserves sheet row order to reproduce the idx tie-break, explicit asOf, UTC-midnight arithmetic, Feb-29 and adjustment-boundary tests, ENGINE_VERSION stamped into nightly balance_snapshots so any silent change to a past cycle is flagged, hire-date edits show a before/after balance diff, API keeps anniversaryDate in the legacy ISO form.",
+     "Migration is a transactional verification gate: 177 row balances, 15 current balances, per-employee counts and the D/E allotment columns must all match or the whole import rolls back; name round-trip is asserted byte-for-byte; legacy_row provenance; drag-and-drop nightly re-verify against a fresh export during a 1-2 week parallel run.",
+     "Auditability: append-only audit_log with old/new JSON in the same transaction as the write, soft deletes with mandatory reason and Restore, logins and sync runs audited, CSV export in the sheet's column layout as the exit format.",
+     "Birthday placeholder rule is exactly right (eight 2023 + three 2026 nulled, 1972/2003/2006/2003 kept)."
+    ],
+    "weaknesses": [
+     "Cutover order is wrong in one step: it runs the adopt pass while the Apps Script is still live, then disables triggers. Since the old script recreates every event each run, the adopted IDs die on the next trigger; the design recovers non-destructively (404 on PATCH recreates, old copies surface as UNMANAGED) but staff would see duplicates until an admin cleans up. Disable triggers first, then adopt.",
+     "The 'clobber' justification is overstated: only the two Walkers share a name token, Google's text search requires all terms, and there are zero same-employee overlapping requests. The delete-all-recreate-all finding alone is sufficient; the clobber claim should be dropped so the runbook does not send Chris hunting for damage that is not there.",
+     "Most machinery for one maintainer: kernel + repos + ledger + planner + snapshots + unmanaged UI + XLSX reader + verification gate, ~10 focused days; stored working_days column plus a nightly recheck job is one more moving part than 'computed, never stored'.",
+     "More server knobs than Proposal 1: several MultiPHP INI edits, config/my.cnf for mysqldump, four cron lines, custom session save_path. All cPanel-UI, but more to get right the first time.",
+     "Never auto-deleting unmanaged events changes today's 'sheet is truth' semantics: manual Google edits linger until reviewed instead of being wiped on the next pass; acceptable for payroll-grade safety, but it must be explained to the office.",
+     "/install?key=APP_KEY puts the app's CSRF/token-hashing secret in a URL that lands in access logs; use a separate one-time install token.",
+     "Uses a STORED generated column and JSON column types; fine on MySQL 5.7+/MariaDB 10.2+ but slightly less portable than Proposal 1's deliberately vanilla DDL. UX is solid but lacks Proposal 2's quick-entry ergonomics, undo, and PWA."
+    ]
+   }
+  ],
+  "winner": "Proposal 3: LSP Time Off, correctness-first PHP 8.2 / MySQL replacement with ledger-based sync",
+  "graft": [
+   "From my verification, a correction to the winner's cutover order: delete the Apps Script time-driven triggers (and the menu entry points) BEFORE running 'Adopt existing events'. Code.gs lines 319-326 and 379-386 mean every trigger run deletes and recreates every event, so Google event IDs are ephemeral until the old script is silenced; adopting before that records IDs that will be dead within one trigger interval. Drop the 'clobber' rationale from the runbook.",
+   "From Proposal 1: make adoption automatic and continuous, not a one-time button. On every sync, an unlinked remote event whose fingerprint (title|start|end_exclusive) exactly matches a desired item is adopted with no API call; only true non-matches are listed as unmanaged. This makes a restored-from-backup ledger harmless and shrinks the unmanaged list to real leftovers.",
+   "From Proposal 1: attempt the calendar push inline on every save with a short curl budget (8-10 s) and let the 15-minute cron be the safety net, so a booked day is on phones in seconds by default; the confirmation message says which happened. Keep Proposal 3's 'Save and sync now' as the explicit variant.",
+   "From Proposal 1: keep the Python re-implementation that reproduced all 177 balances in tools/ as a second independent oracle, and add an api_hits table (ip, user-agent, timestamp) on /api/balances.json so the unknown doGet consumer identifies itself over six months instead of relying on the Apps Script Executions log alone.",
+   "From Proposal 1: start the runbook at ea-php82 (the version the stock EasyApache profile actually ships) and have every cron script print PHP_VERSION and its run summary to its log, with the web PHP version shown in the admin footer, so a /usr/local/bin/php vs ea-php mismatch is visible. Add Proposal 1's ten-year maintenance calendar (yearly PHP bump + self-test + cron path check, AutoSSL check, two-yearly service-account key rotation).",
+   "From Proposal 1: keep the DDL vanilla for MariaDB/MySQL portability: compute display_name in code instead of a STORED generated column, and use MEDIUMTEXT for old_json/new_json/plan_json instead of the JSON type.",
+   "From Proposal 2: make 'Who is out' the landing page with a phone-first layout, a PWA manifest so staff can add it to their home screen, and month-grid chips colored per calendar with filter checkboxes.",
+   "From Proposal 2: the 10-second entry flow on Add Time Off: employee select autofocused with last-used first, PTO/Vacation as two large segmented buttons, end date auto-filled from start, Enter saves, form resets keeping the employee for rapid multi-day entry, and a 10-second Undo toast (cheap given soft deletes and the ledger's delete_pending state).",
+   "From Proposal 2: 'Copy last year's events to <next year>' on the company-events tab for the fixed holidays, and a --compare-url mode in bin/verify.php that fetches the old doGet JSON and diffs it against /api/balances.json automatically during the parallel run.",
+   "From Proposal 2: employee-linked viewer accounts with a 'My Time Off' page (own balances, own ledger, next-year note) as an optional later phase, but keep Proposal 3's no-email admin-generated reset links rather than mail()-based invites.",
+   "Small fixes to the winner: use a separate one-time install token instead of APP_KEY in the /install URL; keep the guard as max(5, 10%) but expose it in settings; and state in the office-facing note that manual edits in Google Calendar are no longer wiped automatically but are listed for admin review."
+  ],
+  "rationale": "All three proposals land on the same sound stack (plain PHP 8.x, PDO/MySQL, service-account JWT over curl, cPanel cron), which the research confirms is the only true 'upload and it runs' option on a Liquid Web cPanel box, so the decision comes down to correctness, data safety and failure modes, which the brief says to weigh heavily. Proposal 3 wins at 57 because it is the only one that read Code.gs closely enough to find the real defect in the current sync (the inclusive-vs-exclusive end-date comparison that makes every run delete and recreate every event; I verified this at lines 319-326 and 379-386) and then designed a ledger that cannot repeat it: per-call transactions, privateExtendedProperty lookup before create, unmanaged events never auto-deleted, a max(5, 10%) guard with per-plan approval, an empty-desired-set abort, and a dry-run gate. Its migration is the only one with a transactional verification gate that rolls back on any of 177 row mismatches, 15 balance mismatches, count or allotment mismatches, and its audit trail (append-only log, soft deletes with reasons, ENGINE_VERSION-stamped nightly snapshots, hire-date edit diffs) is what payroll-adjacent data deserves. It also gets the Google prerequisites right per the research (calendar.events scope, the Admin console secondary-calendar external-sharing setting, Internal OAuth as the fallback rather than a 12-24 h ICS feed) and gets the birthday placeholder split exactly right. Its costs are real: the most code and knobs for one maintainer, one wrong step in cutover order (adopt before disabling triggers, which the ephemeral-ID finding makes futile) and an overstated 'clobber' claim that I could not substantiate in the data. Proposal 1 (56) is the operational favorite and only a point behind: least setup, most maintainable, correct cutover order, self-healing fingerprint adoption, and a kept Python oracle, but its AND-ed safety valve (>20 AND >50%) would let a 40% deletion through on a strict auto-deleting mirror, it verifies after commit rather than gating, it assumes ea-php84 that the stock profile does not ship, and its UX is the thinnest. Proposal 2 (52) has the best screens by far and a good mirror state machine, but is penalized on research grounds for the over-broad full calendar scope, an ICS-only fallback, a mail()-dependent 15-user login scheme, an adopt-then-parallel-run sequence that guarantees stale event IDs at cutover, and no verification gate. The final design should be Proposal 3's engine, ledger, gate and audit with Proposal 1's operational discipline (2-account start, inline sync, continuous adoption, vanilla DDL, PHP-version logging, Python oracle, api_hits) and Proposal 2's entry ergonomics and who's-out phone view grafted on, plus the trigger-first cutover fix."
+ }
+]

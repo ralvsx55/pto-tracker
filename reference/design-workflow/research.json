@@ -1,0 +1,353 @@
+[
+ {
+  "topic": "How a PHP app on shared cPanel can create/update/delete events on five existing Google Calendars (@group.calendar.google.com) owned by a company Google account \u2014 Workspace and consumer-Gmail owners \u2014 comparing service account + sharing, OAuth refresh token, iCal feed, and an Apps Script bridge; plus google/apiclient vs hand-rolled JWT+curl.",
+  "findings": [
+   {
+    "claim": "OPTION 1 (service account + calendar sharing) WORKS WITHOUT domain-wide delegation. Google's service-account OAuth doc states domain-wide delegation is only needed to impersonate users and 'is not required to access resources that were shared directly with the service account'. Practitioner threads (Google Calendar API group, Medium, Daimto PHP tutorial) confirm the recipe: share each calendar with the service account's client_email, choose 'Make changes to events', then call events.insert/patch/delete with the @group.calendar.google.com calendarId. calendarList.insert is not needed for events calls; the shared calendars simply appear in the SA's calendarList.",
+    "source": "https://developers.google.com/identity/protocols/oauth2/service-account ; https://groups.google.com/g/google-calendar-api/c/MySzyAXq12Q ; https://www.daimto.com/google-calendar-api-with-php-service-account/ ; https://medium.com/product-monday/accessing-google-calendar-api-with-service-account-a99aa0f7f743",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Service-account token flow (HTTP/REST, no library needed): build a JWT with header {alg:RS256, typ:JWT}, claims {iss: client_email, scope: space-delimited scopes, aud: https://oauth2.googleapis.com/token, iat, exp <= iat+3600}, sign with the JSON key's private_key (RSA-SHA256), then POST grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<jwt> to https://oauth2.googleapis.com/token; the access token is valid ~1 hour. JSON key fields used: client_email, private_key (PEM with embedded \\n), private_key_id, token_uri.",
+    "source": "https://developers.google.com/identity/protocols/oauth2/service-account#httprest",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Scope to request: https://www.googleapis.com/auth/calendar.events ('View and edit events on all your calendars') is sufficient \u2014 events.insert lists authorized scopes calendar, calendar.events, calendar.app.created, calendar.events.owned. Do NOT pick calendar.events.owned for the service-account path: it only covers calendars the principal owns, and the SA is a writer, not owner, of the shared calendars. Google classifies Calendar scopes as 'sensitive' (matters only for the OAuth consent-screen path, not for service accounts).",
+    "source": "https://developers.google.com/workspace/calendar/api/auth ; https://developers.google.com/workspace/calendar/api/v3/reference/events/insert ; https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Calendar sharing permission levels (Calendar settings > Share with specific people or groups) currently read: 'See only free/busy (hide details)', 'See event details', 'Make changes (see private events as free/busy)' (new level rolling out from July 7 2026), 'Make changes and see event details' (= API role writer, i.e. the old 'Make changes to events'), 'Make changes and manage sharing' (= owner). Any of the 'Make changes...' levels lets the SA create/edit/delete events. If the calendar is a work/school one, 'your administrator decides if you can share it'.",
+    "source": "https://support.google.com/calendar/answer/37082 ; https://workspaceupdates.googleblog.com/2026/07/new-calendar-sharing-permission-level-and-changes-to-recurring-event-visibility.html ; https://developers.google.com/workspace/calendar/api/concepts/sharing",
+    "confidence": "verified"
+   },
+   {
+    "claim": "WORKSPACE OWNER gotcha #1: the service-account address (\u2026@<project>.iam.gserviceaccount.com) counts as OUTSIDE the organization. The Workspace admin's external-sharing policy caps what any user can grant to outsiders (API sharing doc: 'for Google Workspace users, there are also domain settings that might restrict the maximum allowed access'). The five calendars are SECONDARY calendars, whose external-sharing option lives at Admin console > Apps > Google Workspace > Calendar > General (primary calendars are under > Sharing settings). It must be 'Share all information, and outsiders can change calendars' (or '\u2026allow managing of calendars'); at 'Only free/busy' or '\u2026outsiders cannot change calendars' the share dialog will not offer 'Make changes\u2026' for the SA address. The secondary-calendar setting cannot be set per OU. CONSUMER GMAIL OWNER: no admin layer; sharing with the SA email at 'Make changes\u2026' just works.",
+    "source": "https://knowledge.workspace.google.com/admin/calendar/set-google-calendar-sharing-options ; https://developers.google.com/workspace/calendar/api/concepts/sharing ; https://support.google.com/a/thread/274691238",
+    "confidence": "verified"
+   },
+   {
+    "claim": "WORKSPACE OWNER gotcha #2 (JSON key creation may be blocked): Google Workspace/Cloud Identity customers automatically get a Cloud organization resource, and for organizations created on/after May 3 2024 Google enforces 'secure-by-default' org policies including constraints/iam.managed.disableServiceAccountKeyCreation and iam.disableServiceAccountKeyUpload. Creating a JSON key then fails until someone with roles/orgpolicy.policyAdmin (a Workspace super admin can grant themselves this) sets that constraint to 'Not enforced' at the org or, preferably, just for this one project. CONSUMER GMAIL OWNER: a project created without starting a Free Trial lives under 'No organization' and is not subject to these baseline policies, so key creation works. Caveat: Google now auto-creates a 'standalone organization' for NEW Free Trial sign-ups that use a Google (Gmail) address; the docs I could fetch do not say whether the secure-by-default bundle applies to standalone orgs \u2014 assume it may.",
+    "source": "https://docs.cloud.google.com/resource-manager/docs/secure-by-default-organizations ; https://docs.cloud.google.com/resource-manager/docs/creating-managing-organization ; https://docs.cloud.google.com/resource-manager/docs/standalone-organization-overview",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Service accounts cannot add ATTENDEES to events without domain-wide delegation (403 'Service accounts cannot invite attendees without Domain-Wide Delegation of Authority'). Irrelevant for this app (all-day events with no guests), but it rules out ever using the SA to send invitations to staff.",
+    "source": "https://issuetracker.google.com/issues/408598694 ; https://support.google.com/calendar/thread/299552457 ; https://github.com/spatie/laravel-google-calendar/discussions/252",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Calendar API limits: 10,000 requests/min/project, 600 requests/min/user/project, 1,000,000 requests/day/project free (no billing account needed to enable the API; Google says per-day billing above that will be announced later in 2026 with 90 days notice). 403/429 usageLimits -> exponential backoff. Batch endpoint allows up to 1000 calls per batch request but each counts individually toward quota. events.list pages default 250, max 2500 (use timeMin/timeMax, singleEvents=true, pageToken). Well beyond this app's ~200-300 events.",
+    "source": "https://developers.google.com/workspace/calendar/api/guides/quota ; https://developers.google.com/workspace/calendar/api/guides/batch ; https://developers.google.com/workspace/calendar/api/v3/reference/events/list",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Event identity rules for an idempotent sync: you MAY supply your own event id (base32hex: lowercase a-v and 0-9, 5\u20131024 chars, unique per calendar), but an id that was ever used and then deleted CANNOT be reused \u2014 insert returns 409 'The requested identifier already exists' (deleted events persist as status=cancelled tombstones; you'd have to events.update it back to confirmed). events.import (requires iCalUID) creates a private copy, it is NOT an upsert. Practical pattern: let Google generate ids, store google_event_id on the DB row, set extendedProperties.private {lsp_request_id: <row id>} and use events.list?privateExtendedProperty=lsp_request_id=<id> to find orphans. All-day events use start.date / end.date (yyyy-mm-dd) with end EXCLUSIVE \u2014 same +1 day the current Apps Script already does.",
+    "source": "https://developers.google.com/workspace/calendar/api/v3/reference/events ; https://developers.google.com/workspace/calendar/api/v3/reference/events/import ; https://github.com/googleapis/google-api-python-client/issues/846 ; https://developers.google.com/workspace/calendar/api/guides/create-events",
+    "confidence": "verified"
+   },
+   {
+    "claim": "OPTION 2 (OAuth 2.0 web/installed flow + stored refresh token) works for both owner types. To get a refresh token the authorization URL must include access_type=offline, and 'The refresh_token is only returned on the first authorization' unless prompt=consent is also sent. Refreshing: POST https://oauth2.googleapis.com/token with grant_type=refresh_token, client_id, client_secret, refresh_token -> access_token + expires_in. No JWT signing at all, so the hand-rolled version is ~30 lines of curl.",
+    "source": "https://developers.google.com/identity/protocols/oauth2/web-server",
+    "confidence": "verified"
+   },
+   {
+    "claim": "THE 7-DAY GOTCHA, exact rule: 'A Google Cloud Platform project with an OAuth consent screen configured for an external user type and a publishing status of Testing is issued a refresh token expiring in 7 days, unless the only OAuth scopes requested are a subset of name, email address, and user profile.' Console wording: 'Authorizations by a test user will expire seven days from the time of consent. If your OAuth client requests an offline access type and receives a refresh token, that token will also expire.' Testing is also capped at 100 test users. HOW TO AVOID: (a) Workspace owner: set Audience/user type to INTERNAL (only available when the project is in a Cloud organization) \u2014 no verification, no Testing status, no expiry; or (b) Gmail owner (External is the only choice): click 'Publish app' to move to 'In production'. Pushing to production with the sensitive calendar scope does NOT require prior verification; the consequence is the 'Google hasn't verified this app' interstitial (click Advanced > continue) and a cap of 100 new users who see that screen \u2014 irrelevant when the only account consenting is the company account. Re-do the one-time consent AFTER publishing so the stored refresh token is a non-expiring one.",
+    "source": "https://developers.google.com/identity/protocols/oauth2#expiration ; https://support.google.com/cloud/answer/15549945 ; https://developers.google.com/identity/protocols/oauth2/production-readiness/sensitive-scope-verification",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Other ways a stored refresh token dies (plan for a 'Reconnect Google' button in the admin UI): user revokes access; token unused for six months; password change (only when Gmail scopes are involved \u2014 not Calendar); more than 100 live refresh tokens per Google Account per OAuth client (older tokens are silently invalidated \u2014 e.g. re-running the consent flow 100+ times); admin-imposed session length/access restrictions on Workspace.",
+    "source": "https://developers.google.com/identity/protocols/oauth2#expiration",
+    "confidence": "verified"
+   },
+   {
+    "claim": "OPTION 3 (publish .ics feeds, staff subscribe via 'Other calendars > From URL'): the URL must be publicly fetchable without login (use an unguessable token in the path), file must be valid VCALENDAR with stable UIDs per event, DTSTART;VALUE=DATE for all-day. Google refreshes URL-subscribed calendars on its own schedule \u2014 users quote Google's help as 'up to 12 hours' (the current help page I fetched no longer states any interval), community/third-party measurements say 12\u201324 h and sometimes ~48 h \u2014 and there is NO manual refresh (the only trick is remove-and-re-add the calendar). URL-subscribed calendars are per-user, so each of ~15 staff would add 5 URLs themselves and the five existing shared calendars would be retired. Verdict: fine as a bonus feed for phones/Outlook, unsuitable as the primary PTO sync.",
+    "source": "https://support.google.com/calendar/answer/37100 ; https://support.google.com/calendar/thread/12658899 ; https://www.usecarly.com/blog/google-calendar-ics-refresh-rate/ ; https://www.onecal.io/blog/how-to-subscribe-to-a-web-ics-calendar-in-google-calendar ; https://www.ryadel.com/en/google-calendar-force-update-refresh-subscribed-calendar-ics/",
+    "confidence": "likely"
+   },
+   {
+    "claim": "OPTION 4 (Apps Script bridge \u2014 the zero-Cloud-console path): keep a small Apps Script owned by the company Google account that does the calendar writes with CalendarApp (exactly what appsscript_Code.gs already does in updateCalendarAndPTO / syncSimpleEventSheet / addBirthdaysToCalendar). Deploy it as a Web app with executeAs=USER_DEPLOYING ('runs as the user who deployed it') and access=ANYONE_ANONYMOUS ('Any user, even if not logged in'); PHP POSTs a JSON payload (+ shared secret/HMAC in the body) to the /exec URL and doPost(e) reads e.postData.contents. Alternative 'pull' shape: PHP exposes a JSON export URL and a time-driven Apps Script trigger fetches it with UrlFetchApp every N minutes and syncs. No Cloud project, no API enablement, no keys, no OAuth consent screen, and the sync code is already proven.",
+    "source": "https://developers.google.com/apps-script/manifest/web-app-api-executable ; https://developers.google.com/apps-script/guides/web ; C:/Users/chris/AppData/Local/Temp/claude/C--Users-chris-Documents-CODE-Lanyard-Junction-rebrand/6dd9905d-c281-4649-b9c8-af1255daeae4/scratchpad/appsscript_Code.gs",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Apps Script bridge mechanics/limits: responses from ContentService are served via a 302 to a one-time URL on script.googleusercontent.com, so PHP curl must set CURLOPT_FOLLOWLOCATION=true and send Content-Type: application/json (the follow-up is a GET but doPost still receives the original body and the JSON result comes back). Web apps cannot set custom HTTP status codes/headers, so return {ok:true/false} JSON. Quotas: consumer account \u2014 Calendar events created 5,000/day, URL Fetch 20,000/day, triggers 90 min/day; Workspace \u2014 10,000/day, 100,000/day, 6 hr/day; 6 min per execution, 30 simultaneous executions. All ample for ~200 events.",
+    "source": "https://developers.google.com/apps-script/guides/content ; https://dev.to/googleworkspace/youre-probably-using-curl-wrong-with-your-google-apps-script-web-app-1ed8 ; https://developers.google.com/apps-script/guides/services/quotas",
+    "confidence": "verified"
+   },
+   {
+    "claim": "CalDAV is NOT a shortcut: Google's CalDAV v2 endpoint (https://apidata.googleusercontent.com/caldav/v2/<calendarId>/events) requires HTTPS + OAuth 2.0; Basic auth returns 401. It needs the same credentials as the REST API, with a worse protocol, so there is no reason to prefer it.",
+    "source": "https://developers.google.com/workspace/calendar/caldav/v2/guide",
+    "confidence": "verified"
+   },
+   {
+    "claim": "google/apiclient (official PHP library): latest v2.19.4 released 2026-06-29; requires php ^8.1; depends on google/apiclient-services ~0.350, google/auth ^1.37, guzzlehttp/guzzle ^7.4.5, guzzlehttp/psr7 ^2.6, firebase/php-jwt ^6|^7, monolog ^2.9|^3. Standard install is Composer (composer require google/apiclient). A NON-Composer option exists: each GitHub release ships google-api-php-client--PHP8.1.zip and --PHP8.3.zip (~47.7 MB each) with vendor/ bundled. apiclient-services contains 200+ services; the README's composer.json trick \u2014 scripts.pre-autoload-dump = \"Google\\\\Task\\\\Composer::cleanup\" with extra.\"google/apiclient-services\": [\"Calendar\"] \u2014 deletes the rest (forum reports ~54 MB vendor before cleanup; the services git repo is ~148 MB). Auth: $client->setAuthConfig('/path/sa.json'); $client->addScope(Google\\Service\\Calendar::CALENDAR_EVENTS); $svc = new Google\\Service\\Calendar($client); $svc->events->insert($calendarId, new Google\\Service\\Calendar\\Event([...])).",
+    "source": "https://packagist.org/packages/google/apiclient ; https://repo.packagist.org/p2/google/apiclient.json ; https://api.github.com/repos/googleapis/google-api-php-client/releases/latest ; https://raw.githubusercontent.com/googleapis/google-api-php-client/main/README.md ; https://forums.whirlpool.net.au/archive/3nkrkzq9",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Composer on cPanel: Liquid Web and other hosts document running Composer per-account over SSH (php composer-setup.php --install-dir=~/bin), and the equally common approach is to run composer on XAMPP locally and upload vendor/ via File Manager/SFTP. Neither needs root. With the cleanup trick the upload is a few MB; without it ~50 MB.",
+    "source": "https://www.liquidweb.com/blog/installing-composer-on-a-cpanel-server/ ; https://www.namecheap.com/support/knowledgebase/article.aspx/9977/29/how-to-install-composer-on-shared-servers/",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Hand-rolled JWT + curl is practical and is the better fit for this project: the entire client is (1) base64url(header).base64url(claims), (2) openssl_sign($input, $sig, $privateKeyPem, OPENSSL_ALGO_SHA256), (3) one curl POST to the token endpoint, cached ~55 min in a file/DB row, (4) thin curl wrapper for GET/POST/PATCH/DELETE on https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events[/{eventId}] with Authorization: Bearer. ~100 lines, no dependencies beyond php-openssl, php-curl, php-json (all standard on cPanel MultiPHP), runs on PHP 7.4+ as well as 8.x. For the OAuth refresh-token variant there is no JWT at all. Trade-off: you write your own retry/backoff and error parsing (Google returns JSON {error:{code,message,errors[].reason}}).",
+    "source": "https://developers.google.com/identity/protocols/oauth2/service-account#httprest ; https://developers.google.com/workspace/calendar/api/guides/errors ; https://www.php.net/manual/en/function.openssl-sign.php",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Google Cloud console steps (high level), OPTION 1: (1) console.cloud.google.com signed in as the company account -> create project (e.g. 'LSP PTO Calendar'); (2) APIs & Services > Library > 'Google Calendar API' > Enable (no billing needed); (3) IAM & Admin > Service Accounts > Create (e.g. lsp-pto-sync) \u2014 grant NO project roles, Calendar access comes from sharing, not IAM; (4) open the SA > Keys > Add key > Create new key > JSON > download; if this is refused by org policy, IAM & Admin > Organization Policies > 'Disable service account key creation' > Manage policy > Override for this project > Not enforced (needs Org Policy Administrator); (5) in Google Calendar as the calendar owner: Settings > each of the 5 calendars > Share with specific people or groups > add the client_email > 'Make changes\u2026' level > save (Workspace: first make sure Admin console > Apps > Google Workspace > Calendar > General allows outsiders to change secondary calendars); (6) upload the JSON above public_html (e.g. ~/secure/lsp-sa.json, chmod 600), point PHP at it, smoke-test with events.list on one calendar id.",
+    "source": "https://developers.google.com/identity/protocols/oauth2/service-account ; https://docs.cloud.google.com/resource-manager/docs/secure-by-default-organizations ; https://knowledge.workspace.google.com/admin/calendar/set-google-calendar-sharing-options",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Google Cloud console steps, OPTION 2: same project + enable Calendar API; then 'Google Auth Platform' (the renamed OAuth consent screen area): Branding (app name, support email) -> Audience (Internal if Workspace; External for Gmail \u2014 add the company account as a test user for development) -> Data access (add https://www.googleapis.com/auth/calendar.events) -> Clients > Create client > Web application > Authorized redirect URI https://<site>/pto/oauth-callback.php -> copy client id/secret. Before relying on the refresh token in Gmail/External projects, Audience > 'Publish app' (In production). Then visit your auth URL (access_type=offline&prompt=consent&scope=calendar.events) once, signed in as the calendar-owning account, and store the refresh_token server-side (outside web root or encrypted DB column).",
+    "source": "https://support.google.com/cloud/answer/15549945 ; https://developers.google.com/identity/protocols/oauth2/web-server",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Workspace-specific extra check for OPTION 2: Admin console > Security > Access and data control > API controls can block 'unconfigured' third-party apps from sensitive scopes; an app whose project belongs to the same organization is normally allowed, but if consent fails with an admin-block message this is the place to trust the OAuth client id. Not needed for the service-account path.",
+    "source": "https://knowledge.workspace.google.com/admin/apps/domain-wide-delegation-best-practices (adjacent doc; the API-controls behavior itself was not fetched)",
+    "confidence": "unverified"
+   }
+  ],
+  "recommendation": "Primary recommendation: OPTION 1 \u2014 service account + share each of the five calendars with the service-account email at a 'Make changes\u2026' level, implemented with a hand-rolled RS256 JWT + curl helper (no Composer, no 50 MB vendor tree). It is the only path with no user-consent state to expire, works identically whether the owner is Workspace or Gmail once the calendars are shared, and is direct REST that PHP on cPanel handles with stock extensions. Scope: https://www.googleapis.com/auth/calendar.events. Cache the 1-hour access token; write events as all-day (start.date, end.date = last day + 1); store google_event_id on each DB row and stamp extendedProperties.private.lsp_request_id so updates are events.patch and deletes are events.delete, with an optional 'reconcile' job that lists events by timeMin/timeMax and removes orphans (the existing sheet-is-source-of-truth behaviour). Adopt the events the Apps Script already created by matching title+dates once, then stamp them.\n\nDecision tree: (a) Owner is consumer Gmail -> Option 1 as above, no admin steps. (b) Owner is Workspace -> Option 1 still, but two admin prerequisites: allow outsiders to change SECONDARY calendars (Admin console > Apps > Google Workspace > Calendar > General) and, if key creation is blocked, override iam.managed.disableServiceAccountKeyCreation for the project. (c) If Chris wants zero Google Cloud console work, or the Workspace admin refuses to lift the key policy -> OPTION 4, the Apps Script bridge: a doPost web app (Execute as me / Anyone) that receives the PHP app's JSON and reuses updateCalendarAndPTO / syncSimpleEventSheet / addBirthdaysToCalendar from appsscript_Code.gs; PHP calls it with CURLOPT_FOLLOWLOCATION and a shared secret in the body. It is genuinely the least-setup option and the code is already proven; its costs are a dependency on Apps Script staying deployed, quota ceilings that are far above this workload, and a public URL guarded only by a secret. (d) OPTION 2 (OAuth refresh token) is the fallback if neither a key nor Apps Script is acceptable: it works everywhere, but you must publish the consent screen to 'In production' (Gmail) or use 'Internal' (Workspace) BEFORE storing the refresh token, and build a 'Reconnect Google' button for the day the token is revoked. (e) OPTION 3 (ICS feeds) should not be the primary sync \u2014 12\u201324 h refresh, no forced refresh, and every employee must re-subscribe to five URLs \u2014 but it is cheap to add later as an extra feed for phones/Outlook.\n\nLibrary choice: use google/apiclient only if Chris already runs Composer and PHP >= 8.1 on the host; otherwise the hand-rolled client is ~100 lines and avoids a 47.7 MB dependency. If he does use the library, add the Google\\\\Task\\\\Composer::cleanup script with only 'Calendar' to keep vendor/ small.",
+  "gotchas": [
+   "Service-account address is treated as an OUTSIDER by Google Workspace: if the admin's external-sharing setting for secondary calendars is below 'Share all information, and outsiders can change calendars', the share dialog silently caps the SA at free/busy or read-only and every write returns 403/404.",
+   "Secure-by-default org policies (orgs created on/after 2024-05-03, which includes most Workspace tenants that only recently touched Google Cloud) block service-account JSON key creation; the fix is an org-policy override, not anything in the Calendar API. A consumer-Gmail project without a Free Trial is 'No organization' and unaffected; a NEW Free Trial signup with a Gmail address may land in an auto-created 'standalone organization' whose policy defaults were not documented in what I could fetch.",
+   "OAuth 'Testing' publishing status = refresh token dies after 7 days. Publish to production (Gmail/External) or use Internal (Workspace) BEFORE capturing the refresh token; the unverified-app warning is cosmetic for a single internal consenting account.",
+   "access_type=offline alone is not enough on re-consent: Google only returns refresh_token on the first authorization unless prompt=consent is sent \u2014 a common cause of 'refresh_token missing' bugs.",
+   "Refresh tokens also die after 6 months of non-use and when more than 100 live tokens exist per account per client; log and surface auth failures instead of silently skipping calendar sync.",
+   "Custom event ids cannot be reused after deletion (409 'The requested identifier already exists'); events.import is not an upsert. Store Google's generated event id per DB row and use extendedProperties.private for lookup instead of deterministic ids.",
+   "Service accounts cannot add attendees/guests to events without domain-wide delegation (403) \u2014 do not design 'invite the employee' features on the SA path.",
+   "All-day events use start.date/end.date with an EXCLUSIVE end date; the current Apps Script already adds +1 day \u2014 keep that or the last day disappears.",
+   "Apps Script web app responses arrive via a 302 to script.googleusercontent.com; without CURLOPT_FOLLOWLOCATION PHP sees an HTML redirect page, not JSON. Web apps also cannot emit custom HTTP status codes, so encode success/failure in the JSON body, and check that no Workspace admin setting restricts 'Anyone' web-app deployments (not verified).",
+   "Google Calendar refreshes URL-subscribed (.ics) calendars only every ~12\u201324 h (users report up to 48 h), with no manual refresh; URL subscriptions are per-user and cannot be pushed into the existing shared calendars.",
+   "google/apiclient v2.19.4 requires PHP ^8.1 and pulls in Guzzle/monolog/google-auth (~47.7 MB bundled zip); check the cPanel MultiPHP version and use the Composer cleanup task (Calendar only) if you go that route.",
+   "Keep the service-account JSON (or OAuth client secret + refresh token) outside public_html with restrictive permissions; the JSON's private_key contains literal \\n sequences that json_decode already converts \u2014 do not double-escape it.",
+   "The doGet JSON endpoint in the current Apps Script may have an unknown consumer; have the PHP app expose the same JSON shape (employee, remainingPTOCurrent, remainingVacationCurrent, remainingPTONext, remainingVacationNext, afterDate) before retiring the sheet.",
+   "Calendar API quotas (10,000 req/min/project, 1,000,000 req/day free) are not a concern here, but Google says per-day billing above the free threshold will be announced later in 2026 \u2014 irrelevant at ~a few hundred calls/day."
+  ]
+ },
+ {
+  "topic": "What a Liquid Web cPanel/WHM account provides out of the box (PHP versions, PDO, MySQL, cron, SSH/Composer, Node/Python selectors, AutoSSL, outbound HTTPS) and which stack is truly \"upload and it runs\"",
+  "findings": [
+   {
+    "claim": "Liquid Web does not sell traditional cPanel shared hosting in 2026; cPanel is offered on managed VPS/dedicated (cPanel VPS from $33/mo, Small 1 vCPU/1GB to Large 4 vCPU/8GB, cPanel license included; 'Fully Managed with cPanel' is roughly +$28/mo over base). Chris's 'Liquid Web server with standard cPanel' is therefore almost certainly a VPS/dedicated box where he (or Liquid Web support) has WHM root, not a locked-down shared account.",
+    "source": "https://www.liquidweb.com/vps-hosting/cpanel/ ; https://diggitymarketing.com/web-hosting/liquid-web-review/ ; https://vettedsaas.com/reviews/liquid-web/pricing/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "CloudLinux is an OS option on Liquid Web VPS/dedicated ('multiple Linux options including CloudLinux'; 'Get VPS hosting with CloudLinux'), not a guaranteed default. Whether Chris's box has CloudLinux determines whether 'Select PHP Version', 'Setup Node.js App' and 'Setup Python App' icons exist in cPanel at all. Without CloudLinux, PHP versions are set via cPanel's MultiPHP Manager and extension sets are fixed by root in EasyApache 4.",
+    "source": "https://www.vpsbenchmarks.com/hosters/managed_vps/liquid-web ; https://docs.nexcess.com/hosting/server-administration/linux/what-is-cloudlinux/ ; https://docs.nexcess.com/hosting/control-panel/whm/php-management/ ('While the WHM administrator determines which PHP versions and extensions are available, the cPanel user selects which available version their domains will use')",
+    "confidence": "likely"
+   },
+   {
+    "claim": "PHP versions: EasyApache 4 currently packages ea-php81 through ea-php85 (cPanel's ea-php85 spec is at PHP 8.5.9, changelog dated 6 Aug 2026, no 'experimental' marking). cPanel's shipped 'cPanel Default' EA4 profile on GitHub master installs ea-php81 and ea-php82 with PHP-FPM; newer versions are one click away in WHM > EasyApache 4 (root). A cPanel user picks the version per domain in MultiPHP Manager. CloudLinux PHP Selector additionally offers hardened EOL versions (7.4, 8.0, ...) per account.",
+    "source": "https://raw.githubusercontent.com/CpanelInc/ea-php85/master/SPECS/ea-php85.spec ; https://raw.githubusercontent.com/CpanelInc/ea-profiles-cpanel/master/SOURCES/default.json ; https://docs.nexcess.com/hosting/control-panel/whm/php-management/using-the-cloudlinux-php-selector-in-cpanel-and-whm/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "PDO MySQL and PDO SQLite are on by default with stock EasyApache 4. The 'cPanel Default' profile includes ea-phpXX-php-pdo, ea-phpXX-php-mysqlnd, ea-phpXX-php-curl, ea-phpXX-php-mbstring, -xml, -zip, -gd, -bcmath for each PHP version. Per cPanel's ea-php81.spec, the php-pdo subpackage bundles pdo.so + pdo_sqlite.so + sqlite3.so ('cat files.pdo_sqlite >> files.pdo; cat files.sqlite3 >> files.pdo'), and the php-mysqlnd subpackage bundles mysqli.so + pdo_mysql.so. So a plain PHP app can use PDO against MySQL/MariaDB or a SQLite file with zero server work on a MultiPHP server.",
+    "source": "https://raw.githubusercontent.com/CpanelInc/ea-profiles-cpanel/master/SOURCES/default.json ; https://raw.githubusercontent.com/CpanelInc/ea-php81/master/SPECS/ea-php81.spec",
+    "confidence": "verified"
+   },
+   {
+    "claim": "On CloudLinux PHP Selector servers the extension set is per-account and user-toggleable: 'To enable an extension, check the box next to its name' (pdo_mysql, mysqli, curl, mbstring listed as examples). Defaults come from a root-set list (/etc/cl.selector/defaults.cfg) that mirrors the native PHP's compiled extensions; CloudLinux has a known KB case where pdo_mysql/mysqli were missing on alt-php81 until enabled. pdo_sqlite appears in alt-php extension listings but I could not confirm it is ticked by default; a user can tick it themselves in 'Select PHP Version'.",
+    "source": "https://docs.nexcess.com/hosting/control-panel/whm/php-management/using-the-cloudlinux-php-selector-in-cpanel-and-whm/ ; https://cloudlinux.zendesk.com/hc/en-us/articles/4576558946588-The-pdo-mysql-or-mysqli-extension-is-missing-on-alt-php81 (title only; page 403'd) ; https://docs.cloudlinux.com/cloudlinuxos/lve_manager/",
+    "confidence": "likely"
+   },
+   {
+    "claim": "MySQL/MariaDB databases are fully self-service: cPanel's MySQL Database Wizard creates the database, creates a user, sets a password and 'automatically grants the user access to the database'. Names are prefixed with the cPanel username (username limits: 32 chars MySQL 5.7+, 47 chars MariaDB, prefix included; DB names up to 64 chars with underscores counting double). No root involvement.",
+    "source": "https://docs.cpanel.net/cpanel/databases/mysql-database-wizard/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Cron jobs are self-service in cPanel > Advanced > Cron Jobs: pick a preset (e.g. 'Once Per Hour') or minute/hour/day fields, enter an absolute-path command, optional email of output. Running a PHP script is the documented example (absolute path to the .php file). This is the natural home for a nightly Google Calendar sync. To pin a PHP version for CLI use /opt/cpanel/ea-phpXX/root/usr/bin/php (pattern shown in composer guides as 'ea-php72 /opt/cpanel/composer/bin/composer').",
+    "source": "https://docs.cpanel.net/cpanel/advanced/cron-jobs/ ; https://dev.to/themodernpk/run-composer-installupdate-on-specific-version-of-php-in-cpanelwhm-191e",
+    "confidence": "verified"
+   },
+   {
+    "claim": "SSH: shell access is per-account and set by root in WHM > Manage Shell Access (Normal / Jailed / Disabled; 'The account's package determines whether the account has shell access'; cPanel recommends jailed). cPanel's in-browser Terminal (cPanel > Advanced > Terminal) works once the account has shell access and the 'SSH Access & Terminal' feature is enabled in WHM Feature Manager. Liquid Web docs say jailed shell users can run 'Git, PHP, or Node (if installed inside the jail)'. Not needed at all for a plain-PHP deploy (FTP/File Manager suffices).",
+    "source": "https://docs.cpanel.net/whm/account-functions/manage-shell-access/ ; https://docs.cpanel.net/cpanel/advanced/terminal-in-cpanel/ ; https://www.liquidweb.com/help-docs/server-administration/linux/what-is-jailed-shell/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Composer is NO LONGER bundled with cPanel. cPanel's Deprecation Plan entry: 'PHP Composer | Install Composer manually | deprecated v130 | removed v130'; v130 shipped 2025-07-02, and current releases are 134 (2026 LTS) / 136 / 138, so any up-to-date Liquid Web server lacks the old /opt/cpanel/composer/bin/composer. Liquid Web's blog claiming 'as of WHM 58 cPanel includes Composer by default' is stale. Workarounds: root installs it to /usr/local/bin (plus CageFS mapping on CloudLinux), or a user downloads composer.phar into their home dir and runs 'php composer.phar' (needs SSH/Terminal, ~512M memory_limit), or run Composer on Windows and upload the vendor/ folder.",
+    "source": "https://docs.cpanel.net/knowledge-base/cpanel-product/cpanel-deprecation-plan/ ; https://en.wikipedia.org/wiki/CPanel (v130 2025-07-02, v134 2026-01-07, v136 2026-04-07) ; https://portal.cpanelcentral.com/knowledgebase/351/ ; https://www.namecheap.com/support/knowledgebase/article.aspx/9977/29/how-to-install-composer-on-shared-servers/ ; https://www.liquidweb.com/blog/installing-composer-on-a-cpanel-server/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Node.js on cPanel requires root-side setup either way. Path A (CloudLinux Node.js Selector): root installs ea-apache24-mod-alt-passenger (WHM > EasyApache 4 > Apache Modules), installs/enables Node versions and the master toggle in LVE Manager > Options, and Liquid Web recommends raising 'Max cPanel process memory' from 768MB to >=1024MB so npm install works. Then the user: upload app OUTSIDE public_html, Setup Node.js App > Create Application, choose version/mode, set startup file (index.js/app.js), click NPM Install, Run JS Script/Start; Passenger proxies so no .htaccess port hacks. Path B (plain cPanel Application Manager): root installs ea-apache24-mod-passenger (or ea-ruby27-mod_passenger on Alma 8), optional ea-nodejs16..22 and mod_env, and enables the interface in Feature Manager ('not enabled by default'); then register app name, domain, base URL, app path, environment, env vars.",
+    "source": "https://www.liquidweb.com/blog/configure-deploy-cloudlinuxs-node-js-selector/ ; https://docs.cpanel.net/cpanel/software/application-manager/ ; https://cloudlinux.zendesk.com/hc/en-us/articles/4414632531740-The-cPanel-nodejs-error-Apache-Passenger-is-required-by-Node-js-Selector-Please-contact-your-hoster",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Python on cPanel (CloudLinux Python Selector) also needs root first: 'yum install lvemanager alt-python-virtualenv ea-apache24-mod-alt-passenger' + 'yum groupinstall alt-python', then un-hide 'Python App' in LVE Manager > Options > User Interface Settings. User side: Setup Python App > pick version, application root, application URL, optional startup file/entry point; the generated passenger_wsgi.py must expose a variable named 'application' (not 'app'); pip packages via the UI's 'Run Pip Install' or 'pip install -r requirements.txt' inside the generated virtualenv over SSH/Terminal; restart from the UI. Without CloudLinux, Python goes through Application Manager with the same Passenger prerequisite.",
+    "source": "https://docs.nexcess.com/hosting/control-panel/whm/cpanel/python-web-applications-in-cpanel-on-cloudlinux/ ; https://support.hostever.com/kb/how-to-work-with-python-app-in-cpanel-with-cloudlinux/ ; https://docs.cpanel.net/cpanel/software/application-manager/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Free SSL: cPanel's AutoSSL is built in; 'By default, the system uses the Let's Encrypt provider' (Sectigo/cPanel provider also selectable), it runs nightly via upcp and after account creation, and applies to 'each cPanel user whose feature list enables AutoSSL'. Liquid Web's docs describe enabling Let's Encrypt in WHM > Manage AutoSSL and note free HTTPS is available on managed VPS/dedicated (requirements: WHM 58.0.17+, ports 80/443 open, DNS pointing at the server). Older Liquid Web/Nexcess pages still say 'current provider is Comodo' (stale). Most common failure is DCV/DNS, not setup.",
+    "source": "https://docs.cpanel.net/whm/ssl-tls/manage-autossl/ ; https://docs.nexcess.com/hosting/control-panel/whm/security/enable-lets-encrypt/ ; https://www.liquidweb.com/help-docs/security/ssl/lets-encrypt/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Outbound HTTPS to googleapis.com is normally allowed. cPanel imposes no outbound filter; Liquid Web's software firewall on Linux servers is CSF, and CSF's stock TCP_OUT allowlist includes 443 (documented defaults such as '22,53,80,110,143,443,465,587,993,995' or '20,21,22,25,53,80,110,113,443'). Liquid Web's docs state outbound is governed by TCP_OUT and can be edited in WHM > ConfigServer Security & Firewall if a port is missing. PHP-side, the curl extension is in the default EA4 profile, so Google's REST API (or a hand-rolled service-account JWT) works from PHP; allow_url_fopen is a system-level directive some hosts turn off, so prefer curl over file_get_contents('https://...').",
+    "source": "https://www.liquidweb.com/help-docs/security/firewall-management/opening-and-closing-firewall-ports/ ; https://aetherinox.github.io/csf-firewall/usage/configuration/ ; https://raymii.org/s/articles/Configserver_Firewall_and_Security_CSF_LFD.html ; https://www.copahost.com/blog/allow-url-fopen-in-cpanel/",
+    "confidence": "likely"
+   },
+   {
+    "claim": "PHP framework add-on cost: a Composer-based framework (Laravel/Slim/Symfony) is still just files at runtime, so the only extra steps are (1) run composer locally on Windows (XAMPP) and upload vendor/ with the app, or install composer.phar in the account via Terminal; (2) for Laravel, point the domain's document root at public/ (cPanel domain docroot setting or a subdomain) and run migrations once (php artisan migrate via Terminal, or ship SQL and run it in phpMyAdmin); (3) ensure PHP >= framework minimum (Laravel 11/12 need 8.2+, available). Slim/plain PDO apps need only step 1 and can skip it entirely if written without Composer packages.",
+    "source": "https://www.namecheap.com/support/knowledgebase/article.aspx/9977/29/how-to-install-composer-on-shared-servers/ ; https://raw.githubusercontent.com/CpanelInc/ea-profiles-cpanel/master/SOURCES/default.json",
+    "confidence": "likely"
+   }
+  ],
+  "recommendation": "The true \"upload files and it runs\" stack on a Liquid Web cPanel box is plain PHP 8.2/8.3 (8.5 now packaged) using PDO, with either a MySQL/MariaDB database created in cPanel's MySQL Database Wizard or a SQLite file stored outside public_html (pdo_sqlite ships in the same package as PDO). No Composer, no SSH, no WHM changes: FTP/File Manager the files, pick the PHP version in MultiPHP Manager (or Select PHP Version on CloudLinux), create the DB, add a cPanel cron job for the nightly Google Calendar sync, and AutoSSL/Let's Encrypt already covers HTTPS. Google Calendar/Sheets calls work through the curl extension (in the default EA4 profile) and outbound 443 is in CSF's stock allowlist; use a service account with a hand-rolled JWT (openssl) or upload the google/apiclient vendor/ folder built on his Windows machine. Everything else adds root-level work: a Composer framework adds \"build vendor/ locally and upload\" plus (Laravel) a docroot remap and a one-time migration via cPanel Terminal, since cPanel 130+ no longer bundles Composer; a Node app needs root to install Passenger (mod-alt-passenger or ea-apache24-mod-passenger), enable Node versions in LVE Manager or Application Manager in Feature Manager, raise cPanel process memory for npm, and then per-app Setup Node.js App + NPM Install + start, and the app must live outside public_html; a Python app needs root for alt-python + virtualenv + Passenger and un-hiding Python App in LVE Manager, then a passenger_wsgi.py exposing `application`, pip via the UI, and a restart. Since Liquid Web's cPanel offering is managed VPS/dedicated (not shared), Chris or Liquid Web support can do those root steps, but they are exactly the \"server-end setup\" he asked to avoid. Recommend: PHP 8.3 + PDO/MySQL + cPanel cron, optionally a single-file micro-router or Slim with vendor/ uploaded; reserve Node/Python only if a strong reason appears.",
+  "gotchas": [
+   "Confirm in WHM whether the server runs CloudLinux (look for 'Select PHP Version' / 'Setup Node.js App' icons in cPanel). Without CloudLinux there is no Node/Python selector; only cPanel Application Manager (root-enabled) exists.",
+   "cPanel 130 (July 2025) removed the bundled Composer; Liquid Web's blog and many KB pages still claim it is included. Build vendor/ locally and upload, or install composer.phar in the home directory.",
+   "The 'cPanel Default' EA4 profile on GitHub master lists only ea-php81/82; the versions actually installed depend on when Liquid Web provisioned the box. Adding ea-php83/84/85 is a root click in WHM > EasyApache 4 (or a support ticket).",
+   "ea-phpXX-php-sqlite3 (the non-PDO SQLite3 class) is NOT in the default profile, but pdo_sqlite.so and sqlite3.so are bundled inside ea-phpXX-php-pdo per the spec, so PDO SQLite works; verify with phpinfo() rather than assuming.",
+   "On CloudLinux PHP Selector the per-account extension list can omit pdo_mysql/pdo_sqlite depending on root's defaults.cfg; the user must tick them in Select PHP Version.",
+   "If the app keeps a SQLite file, put it above public_html and make sure the PHP handler (suPHP/PHP-FPM as the account user) owns it; cPanel's mod_ruid2/FPM run PHP as the cPanel user, so permissions are usually fine but the directory must be writable.",
+   "cron jobs on cPanel call the system default PHP; pin /opt/cpanel/ea-php83/root/usr/bin/php explicitly if the site runs a different version than the CLI default.",
+   "allow_url_fopen is a system-level directive (root-only in WHM MultiPHP INI Editor); rely on curl for Google API calls instead of file_get_contents on https URLs.",
+   "CSF TCP_OUT allowlist normally includes 443, but a hardened managed server could have a trimmed list; if Google calls time out, check WHM > ConfigServer Security & Firewall > TCP_OUT before blaming code.",
+   "AutoSSL default provider is Let's Encrypt on current cPanel; older Liquid Web/Nexcess pages say Comodo/Sectigo. Either is free; DCV failures are almost always DNS/CDN, not setup.",
+   "Node.js Selector apps must not be placed in public_html and need root to raise 'Max cPanel process memory' to >=1024MB or npm install fails; Python apps must name the WSGI object 'application'.",
+   "Liquid Web's help-docs URLs now 302 to docs.nexcess.com; content is shared between the two brands after the merger, and some pages are marked legacy.",
+   "The 'no shared hosting' finding means the account is a VPS/dedicated with WHM root; if the account is actually a reseller sub-account without WHM, every root step above becomes a support ticket."
+  ]
+ },
+ {
+  "topic": "Replace the homemade Google Sheets + Apps Script PTO/Vacation tracker (15 employees, per-employee anniversary cycles, tiered 0/5/10/15 vacation + 0/3 PTO, admin-entered, birthday/company-event calendars, shared Google Calendar visibility) with a self-hosted cPanel PHP app, a cheap SaaS, or a stay-in-Google option",
+  "findings": [
+   {
+    "claim": "OrangeHRM Starter (open source, GPL-3, PHP 8.3 + MySQL/MariaDB + Apache, zip + browser installer) uses ONE company-wide leave period ('define the leave period corresponding to a calendar year or your company's financial year'); per-employee anniversary cycles are not supported. Entitlements are added manually per employee per period. The Starter feature table marks 'Automated PTO Accrual' and 'PTO Calendar' as Advanced (paid) only. No Google Calendar sync in Starter. Cost $0. cPanel fit: workable (plain PHP zip) but it is a full HRIS. Lock-in: low (GPL, MySQL). Verdict: fails the anniversary-cycle requirement.",
+    "source": "https://starterhelp.orangehrm.com/hc/en-us/articles/360018660419-Configure-your-System-to-use-Leave-Module ; https://orangehrm.com/orangehrm-starter-open-source-software ; https://github.com/orangehrm/orangehrm ; https://starterhelp.orangehrm.com/hc/en-us/articles/6187572000540-Prerequisites-for-installing-OrangeHRM-Starter-in-Linux",
+    "confidence": "verified"
+   },
+   {
+    "claim": "IceHrm: conflicting evidence on whether leave management is in the free edition. icehrm.com says 'Premium extensions are not available on Open Source. To add leave management ... move to IceHrmPro or IceHrm Cloud', but the GitHub release notes for v35.0.1 (Feb 2026) say 'New leave module in the open source edition' and the README lists Leave Management; v36.0.0 shipped 2026-09-14. IceHrmPro is a one-time $1,799 license (up to 50 employees), Elastic License 2.0. Deployment is Docker-first (PHP backend + React frontend, build on first run), so cPanel fit is poor. No evidence of hire-date leave periods, tenure tiers, or Google Calendar sync. Verdict: not a fit; if curious, verify the OSS leave module in a Docker sandbox first.",
+    "source": "https://icehrm.com/icehrm-open-source ; https://github.com/gamonoid/icehrm/releases ; https://github.com/gamonoid/icehrm ; https://icehrm.com/purchase-icehrmpro",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Jorani (PHP 8.1+/MySQL 8+, MIT, CodeIgniter 3, Apache mod_rewrite, 'upload the folder + run the SQL script') is the only OSS candidate with a cPanel one-click path: it is in Softaculous (v1.0.4, released 2026-03-29). Entitlements are rows with explicit start date / end date / days / leave type, at contract level or per employee ('A typical example is for seniority leaves'), max one year each \u2014 so per-employee anniversary cycles ARE expressible, but only by manually adding one entitlement row per employee per cycle with the tier's day count (no automatic tenure tiers). HR admin can create a leave request 'in lieu of an employee' (hr/createleave view) and edit any request. ICS/webcal feeds exist (ics_enabled, calendars/individual + all-employees calendar) that Google Calendar can subscribe to. Cost $0. Lock-in: low. Gaps: approval-workflow centric, duration calc honors defined holidays/non-working days (define no holidays to match your Mon-Fri rule), no birthday or company-event calendars.",
+    "source": "https://github.com/jorani/jorani ; https://www.softaculous.com/softaculous/apps/erp/Jorani ; https://jorani.org/page-leave-entitlements-for-an-employee.html ; https://jorani.org/how-to-allocate-the-entitled-days.html ; https://jorani.org/documentation.html ; https://github.com/bbalet/jorani/blob/master/application/views/hr/createleave.php ; https://jorani.org/page-list-of-employees.html",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Who's OOO (PHP 8.5 / Symfony 7.4 / MySQL 8.4, AGPL-3.0, free) explicitly has 'No accrual rules or carry-over calculations' \u2014 only annual allowances with per-employee overrides; iCal feed for Google Calendar subscription; deploy via Docker Compose or fortrabbit (EUR 4.5/mo). cPanel fit poor (needs PHP 8.5 + composer; most cPanel PHP selectors top out at 8.3/8.4). Verdict: fails tier/anniversary automation.",
+    "source": "https://www.whoisooo.app/ ; https://www.whoisooo.app/blog/leave-tracker-spreadsheet-alternative/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "TimeOff.Management (open source, MIT) is Node.js + SQLite, not PHP; it pro-rates allowance by start date and offers calendar feeds for individuals/departments/company (Google/Outlook/iCal), but shows no anniversary-cycle or tenure-tier automation. On cPanel it needs CloudLinux's 'Setup Node.js App' (Liquid Web documents the Node.js Selector on cPanel VPS/dedicated). README still references Node >= 4, suggesting stale maintenance. Verdict: not a fit for a cPanel/PHP host.",
+    "source": "https://github.com/timeoff-management/timeoff-management-application ; https://www.liquidweb.com/blog/configure-deploy-cloudlinuxs-node-js-selector/",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Vacation Tracker: Core $2/user/mo with $50/mo minimum; Complete $4/user/mo with $100/mo minimum; no free plan. Anniversary cycles: Location setting 'Leave Quota Reset Based On' -> 'User Employment Date' (applies to all users in the location; 'Employee since' must be accurate). Tenure tiers: 'Seniority Based Entitlement' automation (Complete plan only) adds custom tiers (e.g. +5 at 1 yr, +5 at 5 yrs, +5 at 10 yrs) on top of a base quota, awarded on 'Employee's work anniversary'; SBE 'Cannot be edited after creation'. Google Calendar integration and shared calendars (iCal/Google/Outlook) are Complete-only. For 15 users the $100 minimum applies: ~$1,200/yr. Lock-in moderate (CSV export).",
+    "source": "https://vacationtracker.io/pricing/ ; https://vacationtracker.io/helpdesk/can-i-reset-the-leave-quota-based-on-the-employee-start-date/ ; https://vacationtracker.io/helpdesk/how-do-i-set-up-seniority-based-entitlement-sbe-automation/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Timetastic: Business $1.50/user/mo (GBP 1.20), Pro $2.50/user/mo (GBP 2.00), no minimum, no contract, 30-day trial. Per-employee anniversary years are native: 'Timetastic allows different leave years within the same company account, so each employee can have their own leave year end date' (set per user when adding them). Allowances are given up front and edited per user or in bulk \u2014 no automatic years-of-service tier found (you would bump 1-2 allowances per year by hand). Calendar feeds (webcal/iCal) for personal / department / 'Your entire company' with Google Calendar instructions; the pricing page lists 'Google Workspace' integration only on the $5.50 Rota plan, so confirm during trial which plan the company-wide feed is on. 15 users: ~$270/yr (Business) or ~$450/yr (Pro, adds accrual/caps).",
+    "source": "https://timetastic.co.uk/pricing ; https://help.timetastic.co.uk/en/articles/13193400-leave-years-setting-and-updating-your-start-finish-dates ; https://help.timetastic.co.uk/hc/en-us/articles/202179902-Set-your-annual-allowances ; https://help.timetastic.co.uk/hc/en-us/articles/202170742-Calendar-feeds-ical-webcal",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Calamari Time Off module: $2.50/user/mo monthly or $2.00/user/mo annual, 10-seat minimum. Strongest SaaS feature match: accrual type 'Anniversary \u2013 based on the anniversary of employment', absence year can start 'on the employee's employment anniversary', and multiple accrual rules by tenure (eligibility 'after hire (X years...)', 'Seniority before hire' field) give automated 0/5/10/15 tiers. Google Workspace integration in the Time Off module: 'Possibility to synchronize Calamari time off requests to your Google Calendar' plus holiday import. 15 users: ~$360/yr annual or ~$450/yr monthly. More configuration-heavy UI than Timetastic. Lock-in moderate.",
+    "source": "https://www.calamari.io/pricing ; https://help.calamari.io/en/articles/96292-how-to-configure-an-absence-type",
+    "confidence": "verified"
+   },
+   {
+    "claim": "LeaveBoard: free up to 9 employees, PRO $1.35/user/mo (15 users ~ $243/yr), Google Calendar integration listed. But accrual/reset is company fiscal year only: days 'renew on the date when the fiscal year starts ... and not on the hired date (work anniversary) for each employee'. Verdict: fails the anniversary-cycle hard requirement (manual per-employee adjustments only).",
+    "source": "https://leaveboard.com/pricing/ ; https://leaveboard.com/support/setup-year-start/ ; https://leaveboard.com/support/management-employee-allowance/",
+    "confidence": "verified"
+   },
+   {
+    "claim": "BambooHR: quote-only pricing; secondary sources (Mar 2026) report a ~$250/mo flat floor for 25 or fewer employees (~$3,000/yr), per-employee Core/Pro/Elite pricing above 25. Time off is in Core; accrual policies can start on the employee's hire date and use tenure milestones. Verdict: functionally capable but ~10x the cost of the leave-only tools; overkill for 15 people.",
+    "source": "https://www.tinyteam.io/blog/bamboohr-pricing ; https://www.bamboohr.com/product-updates/more-flexibility-for-employee-time-off-accrual-policy-start-dates ; https://www.bamboohr.com/product-updates/new-accrual-setup-process-for-time-off-policies",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Gusto: Simple $49/mo + $6/person, Plus $80 + $12, Premium $180 + $22 (15 people: ~$139/mo Simple, ~$260/mo Plus). Time-off policies support tenure milestones that auto-advance on the anniversary and lump-sum accrual 'on your work anniversary'; the time off + holiday calendar can be exported to Google Calendar via an iCal subscription ('Gusto Reminders'). Help center notes that for companies created on or after 2026-08-31, unlimited policies need Plus/Premium; new Simple companies get accrual-based (limited) policies only. Verdict: only sensible if payroll already runs on Gusto (official pricing/support pages returned 403 to fetch; figures from 2026 secondary sources and search snippets).",
+    "source": "https://hrpaypick.com/gusto-pricing/ ; https://support.gusto.com/article/999756591000000/set-up-and-manage-time-off-policies-for-admins ; https://support.gusto.com/article/163381590100000/view-your-calendar-in-gusto",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Homebase: Basic free (1 location, up to 10 employees \u2014 15 exceeds it), Essentials $30/mo ($24 annual), Plus $70/mo ($56 annual) is the first tier with 'PTO & time-off controls', All-in-One $120/mo ($96 annual); priced per location. Accrual is fixed-per-year or per-hour-worked; hire-anniversary cycles and tenure tiers unverified. Built for hourly/shift scheduling. Verdict: poor fit; ~$672-840/yr for a feature set aimed elsewhere.",
+    "source": "https://www.joinhomebase.com/pricing ; https://support.joinhomebase.com/hc/en-us/articles/115003381292-Create-a-paid-time-off-policy",
+    "confidence": "likely"
+   },
+   {
+    "claim": "Google Workspace has no built-in PTO balance tracker. Google Calendar offers 'Out of office' events (auto-decline invites) and the Calendar API supports outOfOffice event types, but no allotments, cycles or balances. Workspace Marketplace apps (Appogee Leave, Timetastic, Calamari) fill the gap. Cost $0 but does not meet the balance requirement on its own.",
+    "source": "https://developers.google.com/workspace/calendar/api/guides/calendar-status ; https://workspace.google.com/marketplace/app/appogee_leave/920626378223",
+    "confidence": "verified"
+   },
+   {
+    "claim": "AppSheet Core is included at no extra cost with Google Workspace Business Starter, Business Standard, Business Plus (and Enterprise editions) for domain-verified users; standalone AppSheet is free to prototype up to 10 users, then Starter $5 / Core $10 / Enterprise Plus $20 per user/mo. Google Calendar can be an AppSheet data source (add/update events). So an AppSheet front end over the existing 'LSP Calendar Update' sheet is likely $0 for this company, keeps the data in the Sheet, and can either re-express the cycle/tier math in expressions or leave the existing Apps Script as the calc/sync engine. Lock-in: Google (Sheet data is trivially exportable).",
+    "source": "https://knowledge.workspace.google.com/admin/appsheet/manage-appsheet-in-your-organization ; https://about.appsheet.com/pricing/ ; https://support.google.com/appsheet/answer/10106764?hl=en",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Apps Script web app (HtmlService UI over the existing sheet): $0, no server, and the proven logic already exists (the Code.gs already has anniversaryWindowFor/yearsOfServiceAt/tier functions, adjustments support, CalendarApp sync and a doGet JSON endpoint). Workspace quotas are ample for 15 people: 10,000 calendar events created/day, 6 min per execution, 100,000 URL fetches/day. This is the smallest possible change that delivers 'add employee / add time off / see balances' screens with direct (not ICS-lagged) Google Calendar writes. Lock-in: Google, mitigated by the Sheet being the DB and the rules already re-implemented in Python.",
+    "source": "C:/Users/chris/AppData/Local/Temp/claude/C--Users-chris-Documents-CODE-Lanyard-Junction-rebrand/6dd9905d-c281-4649-b9c8-af1255daeae4/scratchpad/appsscript_Code.gs ; https://developers.google.com/apps-script/guides/services/quotas",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Any self-hosted option that relies on Google Calendar subscribing to an ICS/webcal URL will show changes with a 12-24 hour lag (sometimes longer); Google provides no manual refresh and no publisher-side control. Near-real-time from PHP requires the Google Calendar API with a service account (google/apiclient via composer) \u2014 feasible on cPanel via SSH but it is exactly the 'server-side setup' the owner wants to avoid. The current Apps Script writes directly via CalendarApp and has no such lag.",
+    "source": "https://twocal.app/p/google-calendar-ics-refresh-delay/ ; https://usemooncal.com/en/guides/google-calendar-ics-refresh ; https://calfeed.ai/learn/ics-refresh-rate-apple-google",
+    "confidence": "likely"
+   },
+   {
+    "claim": "None of the SaaS or OSS leave tools cover the birthday calendar or the 'Any Additional Events' / 'Factory Closings' company-event calendars. Those three (plus the stale End-Of-Month-Sale calendar) are plain [name, start, end] all-day events and can simply be maintained directly in their existing Google Calendars, dropping the sheet-to-calendar sync for them; only the PTO/Vacation calendar and the balances need a new home.",
+    "source": "appsscript_Code.gs (syncSimpleEventSheet, addBirthdaysToCalendar) and the xlsx_dump.json sheet inventory",
+    "confidence": "verified"
+   },
+   {
+    "claim": "The current sync functions DELETE every event on the five calendar IDs that is not present in the sheet (updateCalendarAndPTO, syncSimpleEventSheet, addBirthdaysToCalendar all delete non-matching events over 2000/2021-2040). If a new tool writes to the same calendars while the old triggers still run, the old script will wipe the new tool's events. Any migration must disable the Apps Script triggers first or point the new tool at new calendars.",
+    "source": "appsscript_Code.gs lines 293-298, 315-326, 375-386",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Business-rule parity checks that most SaaS tools default differently and must be configured explicitly during a trial: (1) company holidays are NOT excluded from consumed days in the current rule, but Jorani/Calamari/Timetastic/Vacation Tracker exclude public holidays by default \u2014 leave the holiday calendar empty or accept the change; (2) no carry-over \u2014 disable rollover; (3) balances may go negative with no approval \u2014 enable admin override/negative balances; (4) a request belongs to the cycle containing its START date \u2014 no current row straddles a cycle so this is low stakes; (5) no half-days.",
+    "source": "appsscript_Code.gs (calculateWorkingDays, computeCycleRemaining) ; https://jorani.org/how-is-leave-duration-calculated.html ; https://help.calamari.io/en/articles/96292-how-to-configure-an-absence-type",
+    "confidence": "verified"
+   },
+   {
+    "claim": "For 15 employees the realistic annual costs are: Apps Script / AppSheet Core on existing Workspace $0; Jorani/OrangeHRM/Who's OOO $0 software (existing cPanel host); LeaveBoard ~$243 (but fails anniversary rule); Timetastic ~$270 (Business) / ~$450 (Pro); Calamari ~$360 (annual) / ~$450 (monthly); Homebase Plus ~$672-840; Vacation Tracker Complete ~$1,200 (minimum-driven); Gusto Simple ~$1,668 / Plus ~$3,120 (payroll bundled); BambooHR ~$3,000.",
+    "source": "Derived from the official pricing pages cited above",
+    "confidence": "verified"
+   },
+   {
+    "claim": "Data-quality items to fix before any migration or import: inconsistent type casing ('Vacation'/'vacation'/'PTO'); placeholder birthday years (2023) for older staff; one Saturday-only request (Danalewich 2026-05-16, 0 working days); 'Last, First' naming vs the 'First Last' most SaaS imports expect; no departed-employee handling (rows would have to be deleted, which also deletes calendar history); the doGet JSON endpoint may have an unknown consumer that would break if the sheet is retired.",
+    "source": "Task context (verified against xlsx_dump.json today) and appsscript_Code.gs doGet",
+    "confidence": "verified"
+   }
+  ],
+  "recommendation": "Honest build-vs-buy call for this specific case, in order of fit:\n\n1. If the real problem is 'Chris is the only maintainer and the Sheets UI is clunky' -> BUY a leave-only SaaS and stop maintaining code. Two candidates actually meet the anniversary-cycle rule: Timetastic Business (~$270/yr; per-user leave years native, simplest UI, tenure tiers are a manual allowance edit for 1-2 people a year, company-wide webcal feed into a shared Google Calendar) or Calamari Time Off (~$360/yr annual; anniversary accrual plus automated seniority rules, pushes requests into Google Calendar, more setup). Vacation Tracker can do it too but its $100/mo Complete minimum makes it ~$1,200/yr for 15 seats; LeaveBoard is cheapest but resets on fiscal year only, so it fails the hard requirement. BambooHR/Gusto/Homebase are payroll/scheduling suites at 2-10x the price and only make sense if payroll already lives there. Run the 30-day trial with the parity checklist (holidays not excluded, no carry-over, negative balances allowed, admin-only entry, shared calendar visible to all staff), import only current-cycle balances rather than 177 historical rows, and keep birthdays and company/factory-closing events as plain Google Calendars edited directly.\n\n2. If the real problem is cost and control ($0, keep the data) -> do not rewrite in PHP; build the friendlier UI where the working logic already is. An Apps Script HtmlService web app (add employee, add time off, balances page, one 'sync' button) on the existing sheet is the smallest change that meets every requirement with zero hosting, zero auth work, direct CalendarApp writes and the verified rules untouched. AppSheet Core (free on Business Starter+) is the no-code variant of the same idea. Lock-in is Google, but the Sheet is the DB and the rules are already re-implemented outside Google.\n\n3. BUILD a PHP/MySQL app on cPanel only if getting off Google Sheets or having a real database is itself the goal. If so, a custom app beats every OSS package for this rule set: the logic is ~150 proven lines, three tables (employees, requests, adjustments) and three screens, and none of the OSS options fit cleanly \u2014 OrangeHRM Starter has a single company-wide leave period with accrual paid-only, IceHrm is Docker-first with conflicting claims about its free leave module, Who's OOO has no accrual rules and needs PHP 8.5, TimeOff.Management is Node. Jorani (Softaculous one-click, MIT, per-employee dated entitlements, HR-on-behalf entry, ICS feeds) is the only OSS package worth a look, but it carries an approval workflow you do not need and still needs a manual entitlement row per employee per cycle. Whatever you build self-hosted, Google Calendar visibility is either an ICS subscription with a 12-24 h lag or a Calendar API service-account setup on the server \u2014 the very setup work you wanted to avoid.\n\nNet: buy Timetastic or Calamari if maintenance is the pain; stay in Google (Apps Script web app or AppSheet) if cost is the pain; only build PHP if leaving Google is the actual goal, and then build custom rather than adopting an OSS HR package.",
+  "gotchas": [
+   "Before pointing ANY new tool at the existing five Google Calendars, disable the Apps Script time-driven triggers: every sync function deletes calendar events that are not present in the sheet, so it will wipe events created by the new tool.",
+   "Google Calendar ICS/webcal subscriptions refresh only every ~12-24 hours with no manual refresh; any self-hosted option using feeds (Jorani, Who's OOO, TimeOff.Management, Timetastic feeds) will show new days off with that lag. Direct Calendar API writes (Apps Script CalendarApp, Calamari sync, Vacation Tracker Google integration) do not have this lag.",
+   "Vacation Tracker's $50/$100 monthly minimums dominate at 15 seats (Core 15x$2=$30 -> billed $50; Complete 15x$4=$60 -> billed $100), and the Seniority Based Entitlement automation cannot be edited after creation (delete and recreate).",
+   "Calamari has a 10-seat minimum and its anniversary/seniority features are accrual-rule based; expect real setup time and verify lump-sum-on-anniversary behaviour and 0-day first year in the trial.",
+   "Timetastic's pricing page lists 'Google Workspace' integration only on the $5.50 Rota plan while help docs describe company-wide webcal feeds usable in Google Calendar; confirm during the trial which plan gives a shared company feed. Tenure tiers are manual per-user allowance edits.",
+   "LeaveBoard cannot reset on hire anniversary (fiscal-year only) despite being the cheapest; do not pick it for this rule set.",
+   "OrangeHRM Starter: single company-wide leave period; 'Automated PTO Accrual' and 'PTO Calendar' are paid Advanced features; official help.orangehrm.com pages blocked fetching (403), so the Starter feature table and starterhelp article were used.",
+   "IceHrm's website says leave management is Pro-only while its GitHub release notes (v35.0.1, Feb 2026) say a new leave module shipped in the open source edition; treat as unresolved and test in Docker before relying on it. Pro is a one-time $1,799 license.",
+   "Who's OOO requires PHP 8.5 / Symfony 7.4 and states outright it has no accrual rules; TimeOff.Management is Node.js (needs CloudLinux Node.js Selector on cPanel) and its README still targets Node >= 4.",
+   "Gusto's own pricing and support pages returned 403 to fetch; the $49+$6 / $80+$12 / $180+$22 figures and the 2026-08-31 policy-gating change come from 2026 secondary sources and search snippets. Only worth it if payroll is already on Gusto.",
+   "Homebase is priced per location and its free tier caps at 10 employees; PTO controls start at Plus ($56-70/mo). It is built for hourly shift teams.",
+   "BambooHR pricing is quote-only; the ~$250/mo small-company floor is from March 2026 third-party reporting.",
+   "Most tools exclude public holidays from consumed days by default and enable carry-over by default; the current rule does neither. Configure explicitly or balances will drift from today's verified numbers.",
+   "SaaS imports usually take current balances, not full history; the 177 historical rows would live on only in the archived sheet. Also find whatever consumes the doGet JSON endpoint before retiring the sheet.",
+   "Clean the data first: normalise type casing, fix placeholder birthday years, drop/confirm the Saturday-only row, convert 'Last, First' to the name format the target tool expects, and decide how departed employees are handled (none exists today)."
+  ]
+ }
+]

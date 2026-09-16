@@ -1,0 +1,8 @@
+# Private runtime data: config, secrets, the Google service-account key, logs, backups, sessions.
+# NEVER commit anything in here. The example config lives in pto_app/config.example.php.
+pto_data/
+
+# Local scratch
+*.log
+Thumbs.db
+.DS_Store

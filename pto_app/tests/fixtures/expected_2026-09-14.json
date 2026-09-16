@@ -1,0 +1,1203 @@
+{
+ "as_of": "2026-09-14",
+ "engine_rules": "see SPEC.md section 4",
+ "us": {
+  "Walker, Rebecca": {
+   "current": {
+    "cycle_start": "2026-03-08",
+    "cycle_end": "2027-03-08",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 1,
+     "Vacation": 1
+    },
+    "remaining": {
+     "PTO": 2,
+     "Vacation": 14
+    }
+   },
+   "next": {
+    "cycle_start": "2027-03-08",
+    "cycle_end": "2028-03-08",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "after_date": "03/08/2027"
+  },
+  "Catuto, Raymond": {
+   "current": {
+    "cycle_start": "2026-07-05",
+    "cycle_end": "2027-07-05",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 3
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 12
+    }
+   },
+   "next": {
+    "cycle_start": "2027-07-05",
+    "cycle_end": "2028-07-05",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "after_date": "07/05/2027"
+  },
+  "Ketter, Melanie": {
+   "current": {
+    "cycle_start": "2026-08-05",
+    "cycle_end": "2027-08-05",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 1,
+     "Vacation": 5
+    },
+    "remaining": {
+     "PTO": 2,
+     "Vacation": 10
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-05",
+    "cycle_end": "2028-08-05",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "after_date": "08/05/2027"
+  },
+  "Modzik, Clyde": {
+   "current": {
+    "cycle_start": "2026-04-29",
+    "cycle_end": "2027-04-29",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 2
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 13
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-29",
+    "cycle_end": "2028-04-29",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "after_date": "04/29/2027"
+  },
+  "Swafford, Nikki": {
+   "current": {
+    "cycle_start": "2026-08-10",
+    "cycle_end": "2027-08-10",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 2,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 1,
+     "Vacation": 15
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-10",
+    "cycle_end": "2028-08-10",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "after_date": "08/10/2027"
+  },
+  "Danalewich, Ryan": {
+   "current": {
+    "cycle_start": "2026-08-10",
+    "cycle_end": "2027-08-10",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-10",
+    "cycle_end": "2028-08-10",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 15
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 15
+    }
+   },
+   "after_date": "08/10/2027"
+  },
+  "Moss, Joshua": {
+   "current": {
+    "cycle_start": "2026-02-07",
+    "cycle_end": "2027-02-07",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 5
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-02-07",
+    "cycle_end": "2028-02-07",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 10
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 10
+    }
+   },
+   "after_date": "02/07/2027"
+  },
+  "Coleman, Chris": {
+   "current": {
+    "cycle_start": "2026-01-10",
+    "cycle_end": "2027-01-10",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 10
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 10
+    }
+   },
+   "next": {
+    "cycle_start": "2027-01-10",
+    "cycle_end": "2028-01-10",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 10
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 10
+    }
+   },
+   "after_date": "01/10/2027"
+  },
+  "Walker, Jennifer": {
+   "current": {
+    "cycle_start": "2025-12-12",
+    "cycle_end": "2026-12-12",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 1,
+     "Vacation": 5
+    },
+    "remaining": {
+     "PTO": 2,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2026-12-12",
+    "cycle_end": "2027-12-12",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "12/12/2026"
+  },
+  "Fedak, Krisanne": {
+   "current": {
+    "cycle_start": "2026-01-26",
+    "cycle_end": "2027-01-26",
+    "allotment": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 0,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-01-26",
+    "cycle_end": "2028-01-26",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "01/26/2027"
+  },
+  "Kennedy, Brooke": {
+   "current": {
+    "cycle_start": "2026-03-30",
+    "cycle_end": "2027-03-30",
+    "allotment": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 0,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-03-30",
+    "cycle_end": "2028-03-30",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "03/30/2027"
+  },
+  "Pirlot, Harmony": {
+   "current": {
+    "cycle_start": "2026-04-16",
+    "cycle_end": "2027-04-16",
+    "allotment": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 0,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-16",
+    "cycle_end": "2028-04-16",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "04/16/2027"
+  },
+  "Bewley, Lisa": {
+   "current": {
+    "cycle_start": "2026-07-13",
+    "cycle_end": "2027-07-13",
+    "allotment": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 0,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-07-13",
+    "cycle_end": "2028-07-13",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "07/13/2027"
+  },
+  "Thorne, Morgan": {
+   "current": {
+    "cycle_start": "2026-08-24",
+    "cycle_end": "2027-08-24",
+    "allotment": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 0,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-24",
+    "cycle_end": "2028-08-24",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "08/24/2027"
+  },
+  "Dowling, Jenn": {
+   "current": {
+    "cycle_start": "2026-09-01",
+    "cycle_end": "2027-09-01",
+    "allotment": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 0,
+     "Vacation": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-09-01",
+    "cycle_end": "2028-09-01",
+    "allotment": {
+     "PTO": 3,
+     "Vacation": 5
+    },
+    "used": {
+     "PTO": 0,
+     "Vacation": 0
+    },
+    "remaining": {
+     "PTO": 3,
+     "Vacation": 5
+    }
+   },
+   "after_date": "09/01/2027"
+  }
+ },
+ "manila": {
+  "Myra": {
+   "current": {
+    "cycle_start": "2025-11-11",
+    "cycle_end": "2026-11-11",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 9
+    },
+    "remaining": {
+     "PTO": 1
+    }
+   },
+   "next": {
+    "cycle_start": "2026-11-11",
+    "cycle_end": "2027-11-11",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "11/11/2026"
+  },
+  "Miguel": {
+   "current": {
+    "cycle_start": "2026-04-22",
+    "cycle_end": "2027-04-22",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 1.0
+    },
+    "used": {
+     "PTO": 5
+    },
+    "remaining": {
+     "PTO": 6.0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-22",
+    "cycle_end": "2028-04-22",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "04/22/2027"
+  },
+  "John Michael": {
+   "current": {
+    "cycle_start": "2026-04-04",
+    "cycle_end": "2027-04-04",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 5
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-04",
+    "cycle_end": "2028-04-04",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "04/04/2027"
+  },
+  "John Roman Cano": {
+   "current": {
+    "cycle_start": "2026-06-06",
+    "cycle_end": "2027-06-06",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "next": {
+    "cycle_start": "2027-06-06",
+    "cycle_end": "2028-06-06",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "06/06/2027"
+  },
+  "Raymond Caspe": {
+   "current": {
+    "cycle_start": "2026-03-03",
+    "cycle_end": "2027-03-03",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 2.0
+    },
+    "used": {
+     "PTO": 2
+    },
+    "remaining": {
+     "PTO": 10.0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-03-03",
+    "cycle_end": "2028-03-03",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "03/03/2027"
+  },
+  "Jam": {
+   "current": {
+    "cycle_start": "2026-02-09",
+    "cycle_end": "2027-02-09",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 8
+    },
+    "remaining": {
+     "PTO": 2
+    }
+   },
+   "next": {
+    "cycle_start": "2027-02-09",
+    "cycle_end": "2028-02-09",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "02/09/2027"
+  },
+  "Chona": {
+   "current": {
+    "cycle_start": "2026-08-06",
+    "cycle_end": "2027-08-06",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-06",
+    "cycle_end": "2028-08-06",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "after_date": "08/06/2027"
+  },
+  "Mary Ann": {
+   "current": {
+    "cycle_start": "2026-04-27",
+    "cycle_end": "2027-04-27",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 4
+    },
+    "remaining": {
+     "PTO": 6
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-27",
+    "cycle_end": "2028-04-27",
+    "allotment": {
+     "PTO": 10
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 10
+    }
+   },
+   "after_date": "04/27/2027"
+  },
+  "Eric Codog": {
+   "current": {
+    "cycle_start": "2026-08-31",
+    "cycle_end": "2027-08-31",
+    "allotment": {
+     "PTO": 0
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-31",
+    "cycle_end": "2028-08-31",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "after_date": "08/31/2027"
+  },
+  "Arlan": {
+   "current": {
+    "cycle_start": "2026-08-02",
+    "cycle_end": "2027-08-02",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 2
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "next": {
+    "cycle_start": "2027-08-02",
+    "cycle_end": "2028-08-02",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "after_date": "08/02/2027"
+  },
+  "Rei": {
+   "current": {
+    "cycle_start": "2026-06-04",
+    "cycle_end": "2027-06-04",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "next": {
+    "cycle_start": "2027-06-04",
+    "cycle_end": "2028-06-04",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "after_date": "06/04/2027"
+  },
+  "Dianne": {
+   "current": {
+    "cycle_start": "2026-01-25",
+    "cycle_end": "2027-01-25",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 3
+    },
+    "remaining": {
+     "PTO": 2
+    }
+   },
+   "next": {
+    "cycle_start": "2027-01-25",
+    "cycle_end": "2028-01-25",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "after_date": "01/25/2027"
+  },
+  "Rimalyn": {
+   "current": {
+    "cycle_start": "2026-04-04",
+    "cycle_end": "2027-04-04",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 3
+    },
+    "remaining": {
+     "PTO": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-04",
+    "cycle_end": "2028-04-04",
+    "allotment": {
+     "PTO": 5
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 5
+    }
+   },
+   "after_date": "04/04/2027"
+  },
+  "Zel": {
+   "current": {
+    "cycle_start": "2026-04-17",
+    "cycle_end": "2027-04-17",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "next": {
+    "cycle_start": "2027-04-17",
+    "cycle_end": "2028-04-17",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "after_date": "04/17/2027"
+  },
+  "Apple": {
+   "current": {
+    "cycle_start": "2025-09-16",
+    "cycle_end": "2026-09-16",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 2
+    },
+    "remaining": {
+     "PTO": 1
+    }
+   },
+   "next": {
+    "cycle_start": "2026-09-16",
+    "cycle_end": "2027-09-16",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "after_date": "09/16/2026"
+  },
+  "Reden": {
+   "current": {
+    "cycle_start": "2026-01-14",
+    "cycle_end": "2027-01-14",
+    "allotment": {
+     "PTO": 0
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-01-14",
+    "cycle_end": "2028-01-14",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "after_date": "01/14/2027"
+  },
+  "Dayne": {
+   "current": {
+    "cycle_start": "2026-01-19",
+    "cycle_end": "2027-01-19",
+    "allotment": {
+     "PTO": 0
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-01-19",
+    "cycle_end": "2028-01-19",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "after_date": "01/19/2027"
+  },
+  "John Michael D": {
+   "current": {
+    "cycle_start": "2026-02-03",
+    "cycle_end": "2027-02-03",
+    "allotment": {
+     "PTO": 0
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 0
+    }
+   },
+   "next": {
+    "cycle_start": "2027-02-03",
+    "cycle_end": "2028-02-03",
+    "allotment": {
+     "PTO": 3
+    },
+    "adjustments": {
+     "PTO": 0
+    },
+    "used": {
+     "PTO": 0
+    },
+    "remaining": {
+     "PTO": 3
+    }
+   },
+   "after_date": "02/03/2027"
+  }
+ },
+ "manila_adjustments_anchored": [
+  {
+   "employee": "Miguel",
+   "kind": "PTO",
+   "effective_date": "2026-04-22",
+   "days": 1.0,
+   "reason": "Adjustment for Miguel as he's taking his last day on 4/22 but it's pulling it off the new cycle because it's the same Hire date.",
+   "sheet_effective": "2026-03-02",
+   "sheet_apply_to": "NEXT"
+  },
+  {
+   "employee": "Raymond Caspe",
+   "kind": "PTO",
+   "effective_date": "2026-03-03",
+   "days": 2.0,
+   "reason": "Adjustment for Raymond - Had 5 days and thought he was taking some of those but scheduled after renew date.",
+   "sheet_effective": "2026-03-03",
+   "sheet_apply_to": "CURRENT"
+  }
+ ],
+ "manila_split_cases": [
+  {
+   "employee": "Miguel",
+   "start": "2024-04-18",
+   "end": "2024-04-22",
+   "by_cycle": {
+    "2023-04-22": 2,
+    "2024-04-22": 1
+   }
+  },
+  {
+   "employee": "Rimalyn",
+   "start": "2026-04-02",
+   "end": "2026-04-08",
+   "by_cycle": {
+    "2025-04-04": 2,
+    "2026-04-04": 3
+   }
+  }
+ ]
+}

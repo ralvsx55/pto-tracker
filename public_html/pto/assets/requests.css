@@ -1,0 +1,22 @@
+/* Time-off form (request.php) and list (requests.php). Loaded after app.css ([hidden], .filters, .actions-cell). */
+
+/* form */
+.field-label { display: block; font-weight: 600; font-size: .9rem; margin: .6rem 0 .2rem; }
+.segmented { margin-top: .1rem; }
+.segmented label { border-right: 1px solid var(--line); }
+.segmented label:last-child { border-right: 0; }
+.segmented label:hover { background: var(--zebra); }
+.segmented input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+.preview .line { font-weight: 600; }
+.preview .err { color: var(--danger); font-weight: 600; }
+.preview ul.warnings { margin-top: .35rem; }
+.preview .warn { color: var(--amber); }
+.delete-form { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--line); }
+
+/* list */
+.filters > div { min-width: 0; }
+.filters select { width: auto; min-width: 8rem; }
+.filters .btn { margin-bottom: 1px; }
+.sub { display: block; font-size: .78rem; color: var(--muted); font-weight: 400; white-space: nowrap; }
+td.note-cell { max-width: 16rem; overflow-wrap: anywhere; }
+.count { color: var(--muted); font-size: .88rem; }

@@ -1,0 +1,36 @@
+/* events.php and history.php. Loaded through layout_header(['css' => ['assets/events.css']]); no inline styles (CSP).
+   app.css has the shared .subtabs, .inline-form, .filters and .pager rules. */
+
+.ev-toolbar { margin-bottom: .6rem; }
+.ev-inline { display: inline; margin: 0 .3rem 0 0; }
+.ev-toolbar select { width: auto; display: inline-block; }
+
+/* events table: compact inputs in the add / edit rows */
+.ev-table input[type=text], .ev-table input[type=date], .ev-table select { padding: .3rem .4rem; font-size: .92rem; }
+.ev-table input[type=date] { min-width: 9.5rem; }
+.ev-table .ev-add td, .ev-table .ev-edit td { background: var(--primary-soft); }
+.ev-table .ev-flagged td { background: var(--amber-bg); }
+.ev-table .ev-check { display: flex; gap: .4rem; align-items: flex-start; font-weight: 400; font-size: .88rem; margin: .2rem 0 0; }
+.ev-table .ev-check input { margin-top: .2rem; }
+.ev-table .ev-callabel { font-size: .8rem; margin: .4rem 0 .15rem; }
+.ev-table .ev-actions { white-space: nowrap; }
+.ev-table .ev-flag { margin-top: .35rem; }
+.ev-table .ev-flag .badge { margin-right: .35rem; }
+
+/* history filters: inside a card, the bar needs no bottom margin */
+.card .filters { margin-bottom: 0; }
+
+/* history rows */
+.audit-when { white-space: nowrap; }
+.audit-who small { display: block; color: var(--muted); }
+.action-insert, .action-restore { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
+.action-update, .action-setting { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-line); }
+.action-delete, .action-login_failed, .action-viewer_login_failed { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line); }
+details.audit-diff summary { cursor: pointer; color: var(--primary); font-size: .85rem; }
+details.audit-diff summary:hover { text-decoration: underline; }
+.diff { width: auto; min-width: 60%; margin: .4rem 0 .2rem; font-size: .86rem; border: 1px solid var(--line); }
+.diff th, .diff td { padding: .25rem .5rem; }
+.diff tbody th { text-align: left; font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; font-size: .86rem; background: transparent; white-space: nowrap; }
+.diff tr.changed td.old { color: var(--danger); background: var(--danger-bg); }
+.diff tr.changed td.new { color: var(--ok); background: var(--ok-bg); }
+.diff td { word-break: break-word; }

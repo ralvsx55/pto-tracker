@@ -1,0 +1,342 @@
+[
+ {
+  "lens": "consistency",
+  "findings": [
+   {
+    "section": "8. Auth and roles > Free hardening",
+    "quote": "the existing domain's AutoSSL certificate covers `/pto/`",
+    "problem": "Stale reference to the old /pto/ folder layout. The app is now on the subdomain timeoff.lightsaberpromotions.com, and section 10 step 1 correctly says AutoSSL must issue a separate certificate for the subdomain once DNS resolves and that Force HTTPS Redirect must be switched on for it. The main domain's certificate does not cover a subdomain, and the main domain's redirect setting does not apply to it, so this sentence contradicts section 10 step 1.",
+    "severity": "major",
+    "fix": "Replace with: \"HTTPS is already there: AutoSSL issues a certificate for `timeoff.lightsaberpromotions.com` on its first run after the subdomain's DNS resolves (section 10 step 1; Let's Encrypt is the default provider on current cPanel **[verified]**), and Force HTTPS Redirect is turned on for the subdomain in the same step.\""
+   },
+   {
+    "section": "4. Data model > birthday_events comment",
+    "quote": "A row dated in the past is\n-- never deleted (section 7).",
+    "problem": "Contradicts confirmed fact 3 and the section 7 birthday rule (\"When an employee is marked departed, every one of their occurrences, past and future, is deleted\") and the employee detail screen (\"every birthday occurrence\" deleted on departure). A developer reading the DDL comment would build a routine that keeps departed people's past birthdays.",
+    "severity": "major",
+    "fix": "Replace with: \"-- Past rows of ACTIVE employees are left in place once adopted. When an employee is marked departed every row for that employee, past or future, is deleted together with its Google event (section 7).\""
+   },
+   {
+    "section": "6. Screens > 9. Admin, and 7. Birthday rule / cutover step 5, and 12. Q5",
+    "quote": "a one-time \"delete unmanaged birthday events dated before <year>\" action",
+    "problem": "Three descriptions of the birthday clean-up disagree. Section 6 defines the action as date-bounded (\"dated before <year>\"), but section 7 and cutover step 5 use it to remove departed and old-name people's occurrences \"from 2023 onward\", which include 2026 and 2027 occurrences that a before-<year> filter would leave behind. Open question 5 then says \"the same one-time action removes everything before the current year\" for CURRENT staff, but after adoption those occurrences carry the `lsp` property and `birthday_events` rows, so they are managed, not unmanaged, and an unmanaged-only action cannot touch them.",
+    "severity": "major",
+    "fix": "Define two separate actions and use the right one in each place. Section 6: \"a one-time 'delete all unmanaged birthday events' action (after adoption, unmanaged means departed or old-name people; no year bound) and an optional 'delete managed birthday occurrences dated before <year>' action that also deletes the matching `birthday_events` rows\". Cutover step 5: \"run 'delete all unmanaged birthday events' once\". Q5: \"say the word and the optional 'delete managed birthday occurrences dated before <year>' action removes current staff's 2023-2025 entries too\"."
+   },
+   {
+    "section": "6. Screens > 3. Time off form and 10. JSON API; 11. Milestone 3",
+    "quote": "Optional now that the viewer page is rendered by the app itself",
+    "problem": "`api.php` is described as optional, session-less and guarded only by a static key, and scheduled for Milestone 3 (after cutover). But the time-off form in Milestone 1 depends on it: \"a live preview line appears (via `api.php?action=preview`, wired from `assets/app.js`)\". A keyed machine endpoint cannot serve a logged-in browser's preview without embedding the key in JavaScript, and the form would have no preview until Milestone 3.",
+    "severity": "major",
+    "fix": "Move the preview to a session-authenticated endpoint and change the form text to \"(via `preview.php`, session-checked like every other screen, wired from `assets/app.js`)\"; keep `api.php` [machines; key only] as the optional endpoint. Add `preview.php` to the file layout in section 3 and to Milestone 1."
+   },
+   {
+    "section": "11. Milestone 3 vs 5. item 4 and 9. Step 3",
+    "quote": "`api.php` (optional) and `verify.php --compare-url` while the old `doGet` still answers",
+    "problem": "`verify.php --compare-url=<doGet URL>` is used as an acceptance check \"during the parallel run\" (section 5 item 4) and in section 9 Step 3, both before cutover. Milestone 3 (weeks 4-6) schedules it after Milestone 2 ends with \"After this the sheet is archived\"; once the sheet is archived and new requests go only to the app, the doGet JSON diverges and the comparison is meaningless.",
+    "severity": "major",
+    "fix": "Move `api.php` and `tools/verify.php` into Milestone 1 (they are needed for section 9 Step 3 and the shadow-mode comparison) and delete them from the Milestone 3 list."
+   },
+   {
+    "section": "8. Auth and roles > Free hardening (CSP) vs 6. Screens > 0. Viewer page",
+    "quote": "`Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'`",
+    "problem": "With no `frame-src` directive, `frame-src` falls back to `default-src 'self'`, which blocks the `https://calendar.google.com/calendar/embed` iframe that the viewer page must show (fact 2). Sent from `bootstrap.php` on every page, this header would render `view.php` with an empty calendar.",
+    "severity": "major",
+    "fix": "Change to: \"`Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; frame-src https://calendar.google.com`\" (or send the `frame-src` addition on `view.php` only) and add \"the viewer page's calendar embed is tested with the header on\" next to the existing note about the form preview."
+   },
+   {
+    "section": "9. Migration plan > Rollback",
+    "quote": "After it: re-enable the triggers, un-protect the sheet, and re-enter the handful of rows added since.",
+    "problem": "The cutover (section 7 step 7, section 10 step 1) adds a permanent 301 from `lightsaberpromotions.com/timeoff518652351` to the new viewer page. A rollback that re-enables the sheet but leaves the redirect in place sends every employee's bookmark to an app that is no longer being updated, so the numbers they see would be wrong.",
+    "severity": "major",
+    "fix": "Replace with: \"After it: remove the 301 redirect in cPanel > Domains > Redirects so the bookmark lands on the original page again (browsers cache 301s, so tell staff to reload once), re-enable the triggers, un-protect the sheet, and re-enter the handful of rows added since.\""
+   },
+   {
+    "section": "4. Data model > users table",
+    "quote": "the login name; everyone has a Workspace address",
+    "problem": "Contradicts confirmed fact 1 and open question 1: whether the company account is Workspace or consumer Gmail is still unknown, so the doc cannot assert that everyone has a Workspace address. Login email has nothing to do with Google anyway.",
+    "severity": "major",
+    "fix": "Replace the comment with: \"-- the login name; any address works, it is not tied to Google\""
+   },
+   {
+    "section": "6. Screens > 0. Viewer page",
+    "quote": "It never shows anything the current page does not already show to every employee.",
+    "problem": "Contradicted two sentences earlier by the \"Two small additions\": the \"cycle renews MM/DD\" hint and the \"After MM/DD/YYYY: N PTO / N Vac\" next-cycle note. The current page (verbatim HTML) shows only Employee, Hire Date, PTO, VAC.",
+    "severity": "minor",
+    "fix": "Replace with: \"Beyond those two hints it shows nothing the current page does not already show to every employee (names, hire dates, remaining days).\""
+   },
+   {
+    "section": "6. Screens > 0. Viewer page",
+    "quote": "or, nicer, the subdomain root with the token in the folder name",
+    "problem": "Contradicts the section 3 file layout, where `public_html/timeoff/` is the document root and `view.php` sits directly in it, and section 10 step 5, where the secret is a `viewer_token` config value checked by the page. A token-named folder does not exist anywhere else in the document.",
+    "severity": "minor",
+    "fix": "Delete the \"or, nicer, ...\" clause so the sentence reads: \"It is served at an unguessable address chosen at setup (`/view.php?k=<viewer_token>`, the token generated like a password and stored in `config.php`)\"."
+   },
+   {
+    "section": "7. Birthday rule",
+    "quote": "they are adopted at cutover and never touched again",
+    "problem": "Contradicts the same paragraph's next sentence and the edge-case table: a rename retitles every past occurrence with a PATCH.",
+    "severity": "minor",
+    "fix": "Replace with: \"they are adopted at cutover and never deleted (a rename still retitles them)\"."
+   },
+   {
+    "section": "6. Screens > 5. Employees (un-depart) vs 7. Algorithm",
+    "quote": "which restores their calendar events on the next sync",
+    "problem": "Mark as departed deletes events \"against the stored `google_event_id`s\" but the doc never says those ids are cleared. If they are not cleared, the incremental pass (id present, fingerprint unchanged) does nothing and only the nightly reconcile re-inserts, so \"the next sync\" is wrong; if a delete failed and the id is kept, the next sync deletes it again rather than leaving it for the reconcile.",
+    "severity": "minor",
+    "fix": "In section 6 item 6 add: \"each successful delete clears the row's `google_event_id` and `synced_fingerprint`\", and in item 5 say \"which re-creates their calendar events on the next sync (the incremental pass re-inserts every row whose id was cleared)\"."
+   },
+   {
+    "section": "10. Deployment > step 8",
+    "quote": "see section 7 \"Ownership first\"",
+    "problem": "Section 7 has no paragraph titled \"Ownership first\"; the paragraph is titled \"Ownership.\" Stale cross-reference from the previous revision.",
+    "severity": "minor",
+    "fix": "Replace with: see section 7 \"Ownership\""
+   },
+   {
+    "section": "11. Build plan > Milestone 0",
+    "quote": "Confirm who owns the five calendars and add a second owner to each",
+    "problem": "Ownership is already confirmed (fact 1, and section 12 says \"Already answered and built in: the calendars are company-owned\"). The open item is Workspace vs Gmail, which Milestone 0 does not mention.",
+    "severity": "minor",
+    "fix": "Replace with: \"Find out whether the company Google account that owns the five calendars is Workspace or consumer Gmail (section 12 question 1) and add a second owner to each calendar\"."
+   },
+   {
+    "section": "12. Open questions > 4",
+    "quote": "the bookmark redirect and the calendar embed's referrer",
+    "problem": "The Google Calendar embed does not depend on the referrer, and section 8 sets `Referrer-Policy: same-origin`, which means no referrer is sent to calendar.google.com at all. Nothing about the subdomain name is baked into the embed.",
+    "severity": "minor",
+    "fix": "Replace with: \"the address is baked into `base_url` and the bookmark redirect\"."
+   },
+   {
+    "section": "10. Deployment > Ten-year maintenance calendar",
+    "quote": "Whenever someone leaves: Mark as departed, never delete.",
+    "problem": "Ambiguous now that departure deliberately deletes calendar events: read alone, \"never delete\" could be taken as \"never delete their calendar events\", the opposite of fact 3.",
+    "severity": "minor",
+    "fix": "Replace with: \"Whenever someone leaves: Mark as departed; never delete their database rows (the app removes their calendar events for you and keeps their history in Former employees).\""
+   },
+   {
+    "section": "7. Google Calendar sync design > Decision",
+    "quote": "still shared read-only to staff",
+    "problem": "For the no-login viewer page's embed to render (fact 2), the five calendars must be publicly visible, which they already are or the current page would show nothing. Saying they are merely shared read-only to staff understates what the design relies on, and a Workspace admin tightening \"external sharing\" (mentioned in the prerequisites) would silently break the viewer page.",
+    "severity": "minor",
+    "fix": "Replace with: \"still publicly readable (the viewer page's embed depends on it, as today) and still shared with staff\", and add to the Workspace prerequisite bullet: \"the same setting must keep allowing the five calendars to be public, or the viewer page's embed goes blank\"."
+   },
+   {
+    "section": "7. One-time cutover > step 1",
+    "quote": "Then switch back to `dry_run` and paste the real IDs.",
+    "problem": "After a live rehearsal, every mirrored row holds a `google_event_id` that belongs to a throwaway calendar. The plan works only because step 3 re-imports with \"replace all\" and wipes those rows before adoption; the step does not say so, and if a future rehearsal is followed by an adoption without a re-import, reconcile would treat the stale ids as missing and re-insert duplicates of the adopted events.",
+    "severity": "minor",
+    "fix": "Append: \"The stale event ids left by the rehearsal are discarded by the 'replace all' re-import in step 3; if you ever rehearse again without re-importing, run Admin > Calendars > 'Clear stored event ids' (a one-line UPDATE setting `google_event_id` and `synced_fingerprint` to NULL) before adopting.\""
+   }
+  ],
+  "overall": "The revision has removed the doGet passthrough, the /pto/ folder layout, the <domain> placeholders, the stale sales calendar and the keep-departed-events behaviour almost everywhere; the viewer page description matches the real page's heading, iframe parameters and four-column table. What remains are one leftover `/pto/` reference in the TLS paragraph (wrong for a subdomain), a DDL comment that still says past birthday rows are never deleted, three mutually inconsistent descriptions of the birthday clean-up action, an `api.php` that is called optional but that the time-off form depends on, a CSP header that would block the calendar iframe, a build schedule that places verify.php after the cutover it is meant to validate, and a rollback that forgets to remove the 301 redirect. None of the findings is a data-losing blocker; the majors would each lead to a wrong build or a contradictory instruction and should be fixed before Chris uses the document as a spec."
+ },
+ {
+  "lens": "technical",
+  "findings": [
+   {
+    "section": "3. Architecture overview > File layout (and 10. step 1)",
+    "quote": "One side effect of the default document root: the same files are also reachable at `https://lightsaberpromotions.com/timeoff/`, because that folder sits inside the main site's `public_html`. That is harmless, but `bootstrap.php` checks the `Host` header and redirects anything that is not the subdomain to `base_url`",
+    "problem": "I probed the live domain (curl, 2026-09-14). `lightsaberpromotions.com` is not the main site: `public_html/.htaccess` already 301s every path (`/`, `/robots.txt`, `/somethingelse`, `/timeoff/`, `/timeoff/view.php`) to `https://lsp.lightsaberpromotions.com/...` (the WordPress/Elementor site), and internally rewrites anything beginning with `timeoff518652351` (case-insensitive, prefix match: `/TIMEOFF518652351`, `/timeoff518652351xyz`, `/timeoff518652351.php` all return the same 5,012-byte page) to the static viewer. So (1) the folder is not 'also reachable' under the main domain, it is redirected to a 404 on lsp.; and (2) far more important, Apache merges per-directory `.htaccess` files down the path, so with no `.htaccess` of its own in `public_html/timeoff/` the subdomain inherits that catch-all rewrite from `public_html/.htaccess`. Unless the existing rule is conditioned on `%{HTTP_HOST}`, the very first request to `timeoff.lightsaberpromotions.com/` will be 301'd to `lsp.lightsaberpromotions.com/`. The doc's 'no `.htaccess` rewrites' stance (section 3, Framework) makes this worse because it tells Chris not to add the one file that isolates the app. Also, the Host check must be skipped when `PHP_SAPI === 'cli'` or the cron scripts will try to redirect.",
+    "severity": "blocker",
+    "fix": "Replace with: \"The subdomain's folder sits inside `public_html`, whose existing `.htaccess` already 301s every URL on `lightsaberpromotions.com` to `lsp.lightsaberpromotions.com` except the `timeoff518652351` page. Apache applies a parent folder's `.htaccess` to its subfolders, so the app MUST ship its own `public_html/timeoff/.htaccess` containing just `RewriteEngine On` (a child directory that declares its own rewrite engine stops inheriting the parent's rewrite rules). Do this before the first request to the subdomain, and open `public_html/.htaccess` in File Manager (Settings > Show hidden files) to read the existing rules first. `bootstrap.php` additionally checks the `Host` header (web requests only; skipped when `PHP_SAPI === 'cli'`) and redirects anything that is not the subdomain to `base_url`.\" Amend section 3 Framework to: \"No router, no `.htaccess` rewrites of our own beyond the one-line `RewriteEngine On` file that isolates the folder from the parent domain's redirect rules.\""
+   },
+   {
+    "section": "10. Deployment, step 1 (and 7. cutover step 7)",
+    "quote": "**At cutover, not before:** cPanel > Domains > Redirects, permanent (301), from `lightsaberpromotions.com/timeoff518652351` to the viewer page's full URL, so every existing bookmark keeps working.",
+    "problem": "cPanel's Redirects UI does support domain+path -> full URL (verified at docs.cpanel.net/cpanel/domains/redirects: path text box after the domain, destination must include a protocol) and it writes `RewriteCond %{HTTP_HOST} ...` + `RewriteRule ^timeoff518652351$ \"https\\:\\/\\/...\" [R=301,L]` into the selected domain's document-root `.htaccess` (i.e. `public_html/.htaccess`). But the same doc states cPanel 'places redirect rules at the bottom of the .htaccess file'. The live `public_html/.htaccess` already contains a hand-written rule that serves the `timeoff518652351*` prefix internally and a catch-all redirect to lsp., both with `[L]`; whichever fires first ends the pass, so a UI-added rule at the bottom is never reached and the old bookmark keeps showing the OLD page (which still fetches the retired `doGet`). Also unverified whether the UI's backslash-escaping of the destination preserves a `?k=` query string. Do not use the UI for this one.",
+    "severity": "blocker",
+    "fix": "Replace with: \"**At cutover, not before:** open `public_html/.htaccess` in File Manager (show hidden files). It already contains a rule that internally rewrites any URL beginning with `timeoff518652351` to the static page, above a catch-all 301 to `lsp.lightsaberpromotions.com`. Change that one rule (keep it above the catch-all) to `RewriteRule ^timeoff518652351 https://timeoff.lightsaberpromotions.com/view.php?k=<viewer_token> [R=301,L,NC]`, save, then open the old bookmark on a phone and confirm it lands on the new page. Do not add this through cPanel > Domains > Redirects: cPanel appends its rule at the bottom of the file, below the existing `[L]` rules, so it would never fire.\" Make the same change to section 7 cutover step 7 and section 9 step 5 wherever 'cPanel Redirects' is implied."
+   },
+   {
+    "section": "8. Auth and roles > Free hardening (affects 6. item 0 view.php)",
+    "quote": "`Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'`, which blocks inline `<script>`, inline `onclick=` handlers and inline `<style>`",
+    "problem": "`frame-src` falls back to `child-src`, which falls back to `default-src`. With `default-src 'self'` the browser refuses to load the `https://calendar.google.com/calendar/embed?...` iframe on `view.php`, so the viewer page ships with an empty calendar box. The doc only says the time-off form's live preview is tested with the header on; it never mentions the embed.",
+    "severity": "major",
+    "fix": "Change to: \"`Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; frame-src https://calendar.google.com`. The `frame-src` entry is required for the Google Calendar embed on `view.php` (without it `default-src 'self'` blocks the iframe); both the live preview and the embed are tested with the header on.\""
+   },
+   {
+    "section": "7. Google Calendar sync design > Algorithm step 4 Guards (and 6. item 6 Mark as departed)",
+    "quote": "marking someone departed performs its own deletes immediately, row by row, so a long-tenured leaver with 60 events never trips this guard",
+    "problem": "Only true when every inline delete succeeds. Section 6 item 6 says 'anything that fails is left for the next sync to finish', but the 15-minute incremental pass works from the desired set ('every `time_off` row whose employee is active'), so a departed person's leftover events are invisible to it; it will still 'on success clear `calendars.dirty`' with the events still on Google. The first pass that sees them is the nightly reconcile, where they count as planned deletes and, above 25 (or 20% of the calendar), abort the whole run until Chris presses Force. A network blip during the departure click therefore turns into a red banner the next morning and a manual Force, the exact scenario the sentence claims cannot happen. The departure loop also runs under the 10-second inline curl budget stated in section 3 unless told otherwise.",
+    "severity": "major",
+    "fix": "Replace with: \"marking someone departed performs its own deletes immediately, row by row against the stored ids (its own budget, up to 60 s within `max_execution_time 90`). Anything left over is finished by a `departed cleanup` step that runs first in every incremental pass: `time_off` and `birthday_events` rows whose employee is departed and whose `google_event_id` is not NULL are DELETEd by id and the id cleared. Because these deletes are driven by stored ids of rows explicitly marked departed, they are exempt from the mass-delete guard, so a long-tenured leaver with 60 events never trips it and the calendar's `dirty` flag stays set until the last one is gone.\" In section 6 item 6 change 'left for the next sync to finish' to 'left for the next 15-minute sync's departed-cleanup step to finish'."
+   },
+   {
+    "section": "6. Screens, item 5 Employees (and 7. Algorithm steps 3-5)",
+    "quote": "A departed person can be un-departed (typo, or someone who changed their mind within days), which restores their calendar events on the next sync.",
+    "problem": "Restoration only works if every successful DELETE (the departure loop, the row delete in item 4, and the reconcile's 'no live row owns' delete) also sets the row's `google_event_id` and `synced_fingerprint` back to NULL. The doc never says so. If the id is kept, the incremental pass sees a non-NULL id and an unchanged fingerprint and does nothing; the person's events only come back after the nightly reconcile notices the ids are missing from the listing. The `birthday_events` comment ('A row dated in the past is never deleted') is consistent with this only if rows are kept with cleared ids rather than removed.",
+    "severity": "major",
+    "fix": "Append to the sentence: \"(every successful DELETE, whether from the departure loop or the reconcile pass, sets the row's `google_event_id` and `synced_fingerprint` to NULL and keeps the row, including every `birthday_events` row; un-departing then puts the rows back in the desired set and the next incremental pass re-inserts them as ordinary NULL-id rows, checking `privateExtendedProperty=lsp=<key>` first so nothing is duplicated)\". Add the same rule as a sentence in section 7 step 5: 'A successful DELETE clears the row's `google_event_id` and `synced_fingerprint`.'"
+   },
+   {
+    "section": "10. Deployment, step 1 (and 8. Free hardening)",
+    "quote": "AutoSSL picks the subdomain up on its next run once DNS resolves, usually within about an hour **[verified]**",
+    "problem": "Not verified and probably wrong on a current server. Hosting KBs (Hawk Host) report that from cPanel v134 AutoSSL no longer includes newly created domains by default (`autossl.exclude_new_domains` now defaults to true); the user must include the domain in cPanel > SSL/TLS Status and run AutoSSL themselves. cPanel's own Create-a-New-Domain page only says the system 'will add a request for an AutoSSL certificate' if the provider enables it, with no timing. Chris would otherwise wait for a certificate that never arrives before turning on Force HTTPS.",
+    "severity": "major",
+    "fix": "Replace with: \"Then cPanel > Security > SSL/TLS Status: tick `timeoff.lightsaberpromotions.com`, click 'Include during AutoSSL' if it is listed as excluded (cPanel v134+ no longer auto-includes new domains **[likely]**), then 'Run AutoSSL' and wait for the green padlock; do not wait for the daily run. Only then turn on Force HTTPS Redirect for it in cPanel > Domains.\" Drop the '[verified]' tag on the timing."
+   },
+   {
+    "section": "3. Architecture overview > File layout (and 10. step 1)",
+    "quote": "accept the default document root (`public_html/timeoff`; it is inside `public_html`, so the WHM \"Restrict document roots\" setting is satisfied and nothing needs changing **[verified]**)",
+    "problem": "The WHM claim is right (Restrict document roots to public_html is On by default and cPanel's own docs say a document root cannot be created outside `public_html/`; verified). But the current Domains > Create a New Domain interface prefills the document root with the full domain name (`public_html/timeoff.lightsaberpromotions.com`), not `public_html/timeoff`; the short form was the old Subdomains interface. The file layout, the `pto_public.zip` extraction target and the `.htaccess` fix all assume `public_html/timeoff`, so Chris must type it rather than accept the prefill. `dirname(__DIR__, 2)` works either way.",
+    "severity": "minor",
+    "fix": "Replace with: \"set the Document Root to `public_html/timeoff` (overwrite the prefilled `public_html/timeoff.lightsaberpromotions.com`; either is inside `public_html`, so the WHM 'Restrict document roots to public_html' setting, On by default, is satisfied and no WHM change is needed **[verified]**)\"."
+   },
+   {
+    "section": "6. Screens, item 0 Viewer page",
+    "quote": "It is served at an unguessable path chosen at setup (for example `/view.php?k=<long random token>` or, nicer, the subdomain root with the token in the folder name)",
+    "problem": "The second option contradicts the file layout: `view.php` sits in the subdomain's document root next to `index.php` (the login-required dashboard), and `bootstrap.php` is found with `dirname(__DIR__, 2)`, which breaks if `view.php` moves into a token-named subfolder. Section 10 step 5 also defines `viewer_token` as a config value checked by the page, i.e. the query-string form.",
+    "severity": "minor",
+    "fix": "Replace with: \"It is served at an unguessable address: `/view.php?k=<viewer_token>`, where `viewer_token` comes from `config.php` (section 10 step 5) and the page returns 404 on a mismatch. `Referrer-Policy: same-origin` keeps the token out of the referrer Google receives from the embed.\""
+   },
+   {
+    "section": "8. Auth and roles (and 6. item 0)",
+    "quote": "Its protection is the unguessable address, the same model the current `timeoff518652351` page relies on, and it shows only what that page already shows every employee (names, hire dates, remaining days).",
+    "problem": "Google's embed help states a calendar is 'only visible to people you share it with' and must be made public for everyone else. The new page uses the identical iframe `src`, so it behaves exactly as today whichever way the five calendars are set (public, or each employee signed into a Google account they are shared with), and nothing in the plan changes calendar sharing, so the page keeps working. But two consequences are worth one sentence: if the calendars are public, the unguessable URL protects only the balances table (the calendar IDs are in the page source and anyone can open them on calendar.google.com); and the Workspace external-sharing setting the doc has Chris check for the service account is the same control that governs public calendars, so it must not be lowered while he is in there.",
+    "severity": "minor",
+    "fix": "Append: \"The calendar embed itself shows events only to viewers the calendars are shared with, or to everyone if the calendars are set to 'Make available to public' [verified, Google Calendar help]; the new page uses the same iframe `src` and the plan changes no sharing settings, so it behaves exactly as today. Note that if the calendars are public the address protects only the table, not the calendar contents, and that the Workspace external-sharing setting checked in section 10 step 8 also governs public calendars, so do not tighten it while adding the service account.\""
+   }
+  ],
+  "overall": "The revised sections are mostly sound on the cPanel and Google mechanics I could verify (WHM 'Restrict document roots' default, path-to-URL support in the Redirects UI, exclusive all-day ends, service-account sharing), but two assumptions about lightsaberpromotions.com are contradicted by the live server. I probed the domain: every URL on lightsaberpromotions.com is already 301'd by public_html/.htaccess to lsp.lightsaberpromotions.com (the WordPress site), except a hand-written prefix rewrite that serves the timeoff518652351 page. That means (1) public_html/timeoff/ is not 'harmlessly reachable' under the main domain, and the subdomain folder will inherit the catch-all redirect unless it gets its own one-line .htaccess (`RewriteEngine On`), which the doc currently tells Chris not to add; and (2) a cPanel > Redirects entry, which cPanel appends at the bottom of that .htaccess below the existing [L] rules, would never fire; the existing rule must be edited into the 301 by hand. Both are blockers because they would leave staff on the old page fetching the retired doGet, or leave the app unreachable. Beyond those: the CSP as written blocks the Google Calendar iframe on view.php (needs frame-src); the 'Mark as departed' flow needs a departed-cleanup step in the incremental pass and an explicit 'clear google_event_id on successful delete' rule, otherwise leftover deletes fall to the nightly reconcile and can trip the mass-delete guard the doc says they never trip, and un-departing cannot restore events on the next sync; the AutoSSL 'within about an hour [verified]' claim is likely wrong on cPanel v134+ where new domains are excluded by default; and three wording/staleness items (default document-root name in the Domains UI, the 'token in the folder name' alternative that breaks the layout, and one sentence on how the embed's visibility depends on the calendars' existing sharing, which the plan leaves untouched, so the page keeps working as today). Verified via docs.cpanel.net (Redirects, Create a New Domain), Namecheap's WHM Tweak Settings KB, Hawk Host's v134 AutoSSL note, Google Calendar help 41207, and live curl probes of lightsaberpromotions.com on 2026-09-14."
+ },
+ {
+  "lens": "cutover",
+  "findings": [
+   {
+    "section": "8 Auth and roles, Free hardening (affects 6.0 Viewer page)",
+    "quote": "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'",
+    "problem": "view.php goes through bootstrap.php and therefore sends this header. frame-src falls back to default-src 'self', so the browser blocks the https://calendar.google.com/calendar/embed iframe. At cutover step 7 every phone that follows the redirect sees the heading, the table, and an empty grey box where the calendar was. The one thing staff actually use the page for is gone, and the doc says the header is only there to block inline script/style.",
+    "severity": "blocker",
+    "fix": "Change to: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; frame-src https://calendar.google.com` (or send the stricter header on every page except view.php, which adds frame-src). Add to cutover step 7: \"confirm the calendar grid actually renders inside the new page, not just the table\"."
+   },
+   {
+    "section": "7 One-time cutover, step 1 (rehearsal)",
+    "quote": "Then switch back to `dry_run` and paste the real IDs.",
+    "problem": "The week-long live rehearsal runs on the server database. Sync now writes ~250 events to the throwaway calendars and stores their Google event IDs in time_off.google_event_id, events.google_event_id and birthday_events. Pasting the real IDs does not clear them. At step 5 adoption only fills rows with NULL ids (or, if it overwrites, the doc does not say so), and at step 6 the reconcile sees \"a row whose google_event_id is not in the listing -> clear it, re-insert\": 177 PTO, ~43 event and ~30 birthday duplicates land on the real calendars next to the originals. The step-3 re-import with \"replace all\" only rescues time_off/events if it truncates them, and birthday_events (keyed on employee_id) survives either way.",
+    "severity": "blocker",
+    "fix": "Replace with: \"Then delete the five throwaway calendars, run Admin > Calendars > **Reset sync state** (NULLs every google_event_id / synced_fingerprint / sync_error on time_off and events, truncates birthday_events, clears calendars.last_sync_*), switch to dry_run, and paste the real IDs. Adoption refuses to run while any row still carries a google_event_id, so this cannot be skipped by accident.\" Add tools/reset_sync_state.php to the file layout and define \"replace all\" in section 9 as truncating employees, time_off, adjustments, events and birthday_events (never users, calendars, settings, audit_log)."
+   },
+   {
+    "section": "7 One-time cutover, step 5",
+    "quote": "Adopt existing events, then Preview plan on each calendar. Expected: PTO about 177 adopted, events about 43 adopted, a handful of PATCHes for the retitled rows",
+    "problem": "Three problems. (1) sync_mode is still dry_run at step 5 and the doc never says whether adoption obeys it; adoption is a writer (it PATCHes the lsp property and canonical title). If it obeys dry_run it silently adopts nothing and step 6 inserts ~250 duplicates. (2) The expected plan is wrong: adoption already PATCHed the retitled rows, so Preview should show zero patches; and it should show a few INSERTs, because the old script's create loop uses a substring `search` over overlapping dates, so two same-title overlapping rows (allowed duplicates) produced one calendar event with the later row's dates; one of the two rows will have no match. (3) \"zero deletes\" is the only stated stop condition, so 250 inserts would not obviously read as a failure.",
+    "severity": "major",
+    "fix": "Replace with: \"Adopt existing events (adoption writes regardless of sync_mode; that is its job). Then Preview plan on each calendar. Expected: PTO roughly 170-177 adopted, events about 43, birthdays 30 for 2026-2027 plus prior years for current staff; the plan must show zero PATCHes, zero DELETEs, and at most a handful of INSERTs (duplicate sheet rows the old script collapsed into one event). Any calendar with more than 10 inserts, or any delete: stop, nothing is live yet.\""
+   },
+   {
+    "section": "7 One-time cutover, step 3 / 9 Step 5",
+    "quote": "Re-export the sheet, re-import (section 9), self-test green.",
+    "problem": "Step 2 deletes every time-driven trigger, including whichever one runs calculateAndFlagRemaining/calculateRemainingDays. Rows the office manager entered during the rehearsal week after the last trigger run (or after the last time someone opened the old page, whose doGet recomputes) have stale or blank E/F/G. The import gate compares against the sheet's stored E/F/G and rolls back on any mismatch, so the cutover stalls on Friday night, and the tempting fix is to loosen the gate.",
+    "severity": "major",
+    "fix": "Insert between steps 2 and 3: \"Recompute the sheet once by hand before exporting: in the Apps Script editor run calculateAll (or open the old viewer page once; its doGet calls calculateRemainingDays). Confirm the last row entered has values in E and F.\" Also state that the export and the gate's $today must be the same calendar day."
+   },
+   {
+    "section": "7 One-time cutover, step 7",
+    "quote": "The Apps Script `doGet` deployment has no callers once that page is gone; leave it in place or archive the deployment, it does not matter.",
+    "problem": "It does matter, and the old page is never actually removed. The static HTML has no cache headers, so a phone can serve its cached copy of timeoff518652351 without hitting the server and never see the 301; that copy then fetches doGet, which returns balances from the frozen sheet: correct on Friday, wrong from the first Monday entry onward, with a live-looking calendar iframe beside it. If instead the deployment is archived, the same cached page shows an empty table (fetch rejects, tbody never filled). The doc also never says to edit or remove the old file, so a redirect rule that misses (www., trailing slash, folder vs file) keeps serving stale numbers silently.",
+    "severity": "major",
+    "fix": "Replace with: \"Retire the old page three ways: (a) the cPanel redirect; (b) overwrite the old file's HTML with a one-line `<meta http-equiv=\\\"refresh\\\" content=\\\"0;url=<viewer URL>\\\">` so a missed rule still lands staff on the new page; (c) redeploy doGet as a new version that returns `[{\\\"employee\\\":\\\"This page has moved to <viewer URL>\\\",\\\"remainingPTO\\\":\\\"\\\",\\\"remainingVacation\\\":\\\"\\\"}]`, so even a cached copy of the old page tells staff where to go instead of showing frozen balances. Keep it that way for a month, then archive the deployment.\""
+   },
+   {
+    "section": "7 Algorithm, Guards / 6.6 Employee detail",
+    "quote": "marking someone departed performs its own deletes immediately, row by row, so a long-tenured leaver with 60 events never trips this guard",
+    "problem": "Contradicted by 6.6, which says failed deletes are \"left for the next sync to finish\". If the inline deletes fail (network, token, 5xx: exactly the cases the doc plans for), the only thing that finishes them is the nightly reconcile (\"lsp key that no live row owns -> DELETE\"), the 15-minute incremental pass never deletes, and 60 planned deletes trips the 25-event guard, so the leaver's events stay on the calendar until Chris notices a red strip and presses Force. The doc also never says departure NULLs google_event_id on success, which is what un-depart (\"restores their calendar events on the next sync\") silently depends on.",
+    "severity": "major",
+    "fix": "Replace with: \"Mark as departed deletes each event and NULLs the row's google_event_id as it goes; the incremental pass only ever inserts rows that belong to the desired set (active employees), so nothing is re-created. Events whose delete failed are finished by the nightly reconcile or Sync now, and deletes owed to departed employees are excluded from the 25-event guard count, so a 60-event leaver never needs Force.\" Change 6.6 \"left for the next sync to finish\" to \"finished by the nightly reconcile or Sync now\"."
+   },
+   {
+    "section": "6.9 Admin, 7 Birthday rule, cutover step 5, 12 Q5",
+    "quote": "a one-time \"delete unmanaged birthday events dated before <year>\" action",
+    "problem": "Three descriptions of the same action disagree. Admin says it deletes unmanaged birthdays *dated before <year>*; cutover step 5 says it removes departed people's birthdays (which includes their 2026 and 2027 entries, not before any year); Q5 says the default leaves current staff's 2023-2025 entries alone. With adoption having already claimed current staff's prior years, \"unmanaged\" already equals \"departed or old-name\", so the year parameter either does nothing or, set low, leaves departed 2026/2027 birthdays on the calendar, which is the thing Chris asked to remove. It is also the most machinery in the design (prior-year adoption, birthday_events history rows, a year-parameterised cleanup, a Q5 variant) for a calendar whose every event is reproducible from name + month/day.",
+    "severity": "major",
+    "fix": "Cut prior-year birthday adoption entirely. Cutover step 5 becomes: \"Birthdays: delete every event on the birthday calendar (they are all regenerable), then Sync now creates Y and Y+1 for active employees only.\" birthday_events then only ever holds Y and Y+1, departure deletes at most two events, the Admin action becomes a single \"Wipe birthday calendar and regenerate\" button, and Q5 is removed. If Chris insists on keeping 2023-2025 history, keep exactly one action named \"delete all unmanaged birthday events\" with no year parameter and make Admin, step 5 and Q5 all say that."
+   },
+   {
+    "section": "10 Backups, Restore drill (also applies to local development)",
+    "quote": "**Restore drill**, once, on XAMPP: empty database, phpMyAdmin > Import the `.sql.gz`, point `config.php` at it, log in, Self-test green",
+    "problem": "The dump carries settings.sync_mode = live and the five real calendar IDs, and the local config points at the real service-account key. The XAMPP copy is then a second live writer: any save or Sync now on the laptop writes to the real calendars, and a nightly-style reconcile from the laptop would delete every event whose row was added after the dump was taken. Nothing in the design distinguishes the laptop from the server.",
+    "severity": "major",
+    "fix": "Add an `environment` key to config.php ('production' | 'local'); bootstrap.php forces sync_mode to dry_run and refuses all Google writes unless it is 'production'. Rewrite the drill: \"...point config.php (environment='local') at it, log in, confirm the footer shows 'Calendar sync is in dry-run mode', Self-test green, adopt in dry-run finds nothing.\""
+   },
+   {
+    "section": "7 Algorithm, Reconcile pass",
+    "quote": "a remote event carrying an `lsp` key that no live row owns (a deleted request, or an event of someone since marked departed) \u2192 DELETE",
+    "problem": "After a database restore from last night's dump, every request saved after the dump exists only as a calendar event with an lsp key and no owning row. The first reconcile deletes them (under 25, so no guard), destroying the only remaining record of those requests. The doc's own advice for a restore (\"re-run adopt so nothing is duplicated\") does not cover this because adoption looks only at events without an lsp key.",
+    "severity": "major",
+    "fix": "Replace with: \"a remote event carrying an lsp key that no live row owns -> DELETE only if audit_log holds a 'delete' for that table/row_id or the owning employee is departed; otherwise list it as **orphaned** on the Admin page with 'adopt as new row' and 'delete' checkboxes, never deleted automatically.\" Add to the restore procedure: \"open Admin > Calendars > orphaned events and re-adopt anything entered after the dump.\""
+   },
+   {
+    "section": "11 Milestone 3 / 9 Step 3",
+    "quote": "`api.php` (optional) and `verify.php --compare-url` while the old `doGet` still answers",
+    "problem": "Milestone 3 is weeks 4-6, after the sheet is archived. From the first Monday the sheet no longer has the new rows, so a doGet-vs-app comparison then is guaranteed to differ and proves nothing; and doGet writes E/F/G into the protected archive on every call.",
+    "severity": "minor",
+    "fix": "Move verify.php --compare-url into Milestone 1 (shadow mode, sheet still live) and delete the phrase from Milestone 3. In cutover step 8 add: \"after this, never call doGet again; verify.php has no meaning once the sheet is frozen.\""
+   },
+   {
+    "section": "6.10 JSON API (simplification)",
+    "quote": "It is kept because it is 40 lines and gives you the same data the old endpoint gave",
+    "problem": "By the document's own account the endpoint has zero consumers after cutover. Keeping it drags in an API key, key hashing, show-once/rotate UI, api.log and its trimming, the anniversaryDate-in-UTC fixture cases, the DECIMAL-to-number casting rule, and a two-yearly key rotation on the maintenance calendar. That is real maintenance surface for a solo maintainer with no use case.",
+    "severity": "minor",
+    "fix": "Cut api.php, the API key, api.log and the rotation line. verify.php compares doGet output directly against lib/balance.php. Move \"JSON API\" to the later-if-needed list."
+   },
+   {
+    "section": "4 Data model, employees (simplification)",
+    "quote": "rehire: points at the earlier, departed row so the ledger shows both stints",
+    "problem": "Rehire linking adds a column, a \"link to former record\" branch on the employee form, a two-stint ledger view and two edge-case tests, for a 15-person office where a rehire is simply a new row with a new hire date and the old row is already in the Former employees tab.",
+    "severity": "minor",
+    "fix": "Drop former_employee_id, the \"link to former record\" offer and the two-stint ledger. Keep the duplicate-active-name warning. The archive already answers \"what happened last time\"."
+   },
+   {
+    "section": "6.0 Viewer page",
+    "quote": "or, nicer, the subdomain root with the token in the folder name",
+    "problem": "Contradicts the file layout: view.php sits in the subdomain's document root, config.php defines viewer_token as a query/path token, and bootstrap redirects every non-subdomain Host to base_url. A token-named folder is neither described nor deployable with the two zips as written.",
+    "severity": "minor",
+    "fix": "Delete the phrase. State one address: `https://timeoff.lightsaberpromotions.com/view.php?k=<viewer_token>`, and use it verbatim in section 10 step 5 and the redirect target."
+   },
+   {
+    "section": "10 Deployment, step 1",
+    "quote": "cPanel > Domains > Redirects, permanent (301), from `lightsaberpromotions.com/timeoff518652351` to the viewer page's full URL",
+    "problem": "The target embeds the viewer token. Browsers cache a 301 indefinitely, so if the token is ever rotated (the doc's own reason for having one) the phones that already followed the old 301 keep going to the dead URL and nothing on the server can correct them.",
+    "severity": "minor",
+    "fix": "Use a temporary (302) redirect, and add a one-time note to staff to re-bookmark the new address after the first Monday; or state explicitly that viewer_token is never rotated."
+   },
+   {
+    "section": "10 Deployment, step 1 and step 4",
+    "quote": "accept the default document root (`public_html/timeoff`",
+    "problem": "The newer cPanel Domains interface proposes `public_html/<full domain name>` (i.e. `public_html/timeoff.lightsaberpromotions.com`) rather than `public_html/timeoff` for a domain created there [unverified]. Step 4 then extracts pto_public.zip into a `timeoff/` folder that is not the document root, and the smoke test 404s.",
+    "severity": "minor",
+    "fix": "\"Accept whatever document root cPanel proposes as long as it is one level under public_html (it may be `public_html/timeoff` or `public_html/timeoff.lightsaberpromotions.com`); write it down. In step 4 extract pto_public.zip into that exact folder. `dirname(__DIR__, 2)` resolves correctly either way.\""
+   },
+   {
+    "section": "7 One-time cutover, step 2",
+    "quote": "remove the custom menu entries that call `updateCalendarAndPTO`, `addBirthdaysToCalendar`, `updateAdditionalEvents`, `updateCalendarFactoryClosings`, `updateCalendarOtherEvents`",
+    "problem": "calculateAndBirthdays() also calls addBirthdaysToCalendar() and is the most likely menu item an office manager would click by habit; it is not in the list. Removing menu entries also means editing an onOpen that is not in this file.",
+    "severity": "minor",
+    "fix": "Simplest and safest: \"In the Apps Script editor, delete all time-driven triggers, then replace the body of each of updateCalendarAndPTO, addBirthdaysToCalendar, syncSimpleEventSheet and calculateAndBirthdays with `throw new Error('Calendar writes moved to timeoff.lightsaberpromotions.com');` and save. Menu entries can stay; they now fail loudly.\""
+   },
+   {
+    "section": "10 Deployment, step 7 (cron)",
+    "quote": "/opt/cpanel/ea-php84/root/usr/bin/php",
+    "problem": "Step 2 allows ea-php83 as the chosen version; the two cron lines hardcode ea-php84. If 83 is what MultiPHP has, the crons fail with a missing binary and nothing syncs or backs up.",
+    "severity": "minor",
+    "fix": "Write the path as `/opt/cpanel/ea-phpNN/root/usr/bin/php` with \"NN = the version you chose in step 2 (83 or 84); confirm it exists in File Manager before saving the cron\"."
+   },
+   {
+    "section": "9 Migration plan",
+    "quote": "Rehearse locally as many times as you like; run once on the server.",
+    "problem": "Step 5 of the same section runs the importer on the server a second time at cutover (\"final export and re-import with replace all\"), and the throwaway rehearsal requires the first server import to have happened a week earlier.",
+    "severity": "minor",
+    "fix": "\"Rehearse locally as many times as you like; on the server it runs twice: once before the calendar rehearsal, once more with 'replace all' on cutover night.\""
+   },
+   {
+    "section": "9 Step 2",
+    "quote": "The importer refuses to run against a non-empty `time_off` table unless \"replace all\" is ticked.",
+    "problem": "\"Replace all\" is never defined. Whether it truncates employees (renumbering ids that birthday_events, audit_log and adjustments reference) or matches them by name, and what happens to google_event_id columns, decides whether the cutover-night re-import duplicates calendar events or breaks foreign keys.",
+    "severity": "minor",
+    "fix": "Define it: \"replace all = inside the transaction, delete birthday_events, adjustments, time_off, events, then employees (in that FK order), reset AUTO_INCREMENT, then import; users, calendars, settings and audit_log are untouched, and one audit_log row records the replacement.\""
+   }
+  ],
+  "overall": "The revised sequence is mostly in the right order (triggers off before adoption, adoption before go-live, redirect last) and the core safety pieces (transactional import gate, exact-match adoption, no automatic deletion of unmanaged events, dry-run default) are worth their cost. Walked as a Friday-evening runbook, though, it has two holes that would produce a wrong or duplicating cutover as written: the CSP header blocks the Google Calendar iframe on the new viewer page (staff land on a page with no calendar), and the throwaway-calendar rehearsal leaves foreign Google event IDs in the database so that going live against the real calendars re-inserts roughly 250 duplicates. Several more are ordering or consistency errors that would stall or mislead: deleting triggers before the final export leaves E/F/G stale and trips the import gate; adoption's behaviour under dry_run is unspecified and the expected Preview plan is wrong; the old page and doGet are left in place so cached copies can show frozen balances; the departure delete path contradicts the mass-delete guard; the birthday clean-up is described three different ways; the local restore drill would make the laptop a live writer; and a reconcile after a restore would delete the only trace of post-dump requests. On complexity: the design is heavier than a solo maintainer needs in four places that can be cut without touching what makes the cutover safe: the JSON API and its key machinery (zero consumers), rehire linking, prior-year birthday adoption plus its year-parameterised cleanup (wipe and regenerate the birthday calendar instead), and verify.php after cutover. With those cuts and the fixes above, the Friday-evening sequence is sound and staff never see wrong or empty data at any step."
+ }
+]

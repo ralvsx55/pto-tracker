@@ -1,0 +1,31 @@
+/* Staff viewer page (view.php). Plain background colour, no images. Calendar on the left, the remaining-days
+   table on the right, stacking to one column on narrow screens. Loaded after app.css. */
+
+/* The two-column layout wants more room than the app's 1100px content width (layout_header body_class). */
+body.viewer-page main.wrap { max-width: 1440px; }
+
+.viewer h1 { text-align: center; font-size: 1.7rem; margin: .5rem 0 1rem; }
+.viewer-cols { display: flex; gap: 1.25rem; align-items: flex-start; }
+.viewer-cal { flex: 1 1 62%; min-width: 0; }
+.viewer-table { flex: 1 1 38%; min-width: 300px; }
+/* Google renders the embed white in both themes; a subtle frame in the theme's line colour ties it in. */
+.viewer-cal iframe { display: block; width: 100%; height: 700px; border: 1px solid var(--line); background: #fff; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.viewer-table table { background: var(--surface); }
+
+.viewer-table h2 { margin: 0 0 .5rem; font-size: 1.1rem; text-align: center; }
+.viewer-table table { margin: 0; max-width: none; border: 1px solid var(--line); border-radius: var(--radius); }
+.viewer-table td.num { font-size: 1.05rem; font-weight: 600; }
+.viewer .renews, .viewer .after { display: block; font-size: .78rem; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.viewer-table .help { text-align: center; margin-top: .6rem; }
+
+/* password form */
+.viewer-gate .card.narrow { margin-top: 1.5rem; }
+.viewer-gate .remember { display: flex; gap: .4rem; align-items: center; font-weight: 400; margin-top: .7rem; }
+.viewer-gate .remember input { margin: 0; }
+
+@media (max-width: 900px) {
+  .viewer-cols { flex-direction: column; }
+  .viewer-table { min-width: 0; width: 100%; }
+  .viewer-cal { width: 100%; }
+  .viewer-cal iframe { height: 560px; }
+}
