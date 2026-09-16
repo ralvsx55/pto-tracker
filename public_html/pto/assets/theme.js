@@ -1,3 +1,4 @@
+/* PTO Tracker v1.0.1 - deploy check */
 /* PTO Tracker theme switch. Loaded in <head> BEFORE the stylesheet (layout_header) so the first paint already
    carries data-theme and there is no light/dark flash. Dark is the default; the choice lives in localStorage
    under "pto-theme" (per browser). Any element with data-theme-toggle flips it. Nothing is exposed globally.

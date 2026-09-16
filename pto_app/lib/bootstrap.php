@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 define('PTO_APP', dirname(__DIR__));
 define('PTO_DATA', dirname(__DIR__, 2) . '/pto_data');
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 define('PTO_CLI', PHP_SAPI === 'cli');
 
 // --- config ------------------------------------------------------------------------------------
