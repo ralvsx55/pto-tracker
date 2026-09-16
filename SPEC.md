@@ -309,18 +309,23 @@ INSERT INTO settings (name, value) VALUES ('schema_version','1'), ('engine_versi
 
 ## 7. Screens (Milestone 1)
 
-Roles: `admin` (everything), `editor` (data entry, optionally limited to one group), `viewer` = the password-protected
-viewer pages (no account). Every logged-in screen has a group switcher (tabs "Lightsaber Promotions | Bright Bird Design")
-that sets `?g=` and remembers it in the session; editors limited to a group see only theirs.
+Roles (the `users.role` ENUM values stay `admin` / `editor`; the UI shows them through `role_label()`):
+`admin` = **Master admin** (everything), `editor` = **Admin** (full data entry across the calendars, optionally limited
+to one group; no Admin or History tab, and `admin.php` / `history.php` answer 403), `viewer` = the viewer pages (no
+account; open or password-protected per group, section 8). Every logged-in screen has a group switcher (tabs
+"Lightsaber Promotions | Bright Bird Design") that sets `?g=` and remembers it in the session; an Admin limited to a
+group sees only theirs.
 
-0. **Viewer page** `view.php?g=us|manila` [password]. Same layout and wording as the old pages: heading, the Google
+0. **Viewer page** `view.php?g=us|manila` [open, or password per group]. Same layout and wording as the old pages: heading, the Google
    Calendar embed iframe (`groups.viewer_embed_src`, height 700), and the table. US: "Remaining Days After Scheduling
    Time Off": Employee | Hire Date | PTO | VAC. Manila: "Remaining Time Off": Employee | Hire Date | PTO (Current)
    with the small "After MM/DD/YYYY: N" line when next-cycle usage exists. Both: a "cycle renews MM/DD" hint under
    the hire date. Active employees only. Server-rendered from the engine using the group's today. `X-Robots-Tag: noindex`.
-   Not password-entered yet: a minimal form (one password field, "Remember this device" always on) styled like the page.
-   Wrong password: 1-second delay, audited with IP. Neither page ever shows the other group.
-1. **Login** `login.php` [admin/editor]. Email + password. Failed login: half-second delay, audited. `must_change_password` forces a change.
+   When the group requires the office password (section 8) and the device is not trusted yet: a minimal form (one
+   password field, "Remember this device" always on) styled like the page. Wrong password: 1-second delay, audited
+   with IP. When the group is open (the default) the same page renders with no form and no cookie. Neither page ever
+   shows the other group.
+1. **Login** `login.php` [master admin / admin]. Email + password. Failed login: half-second delay, audited. `must_change_password` forces a change.
 2. **Dashboard** `dashboard.php` (also `index.php` -> redirect) [both]. For the selected group: one row per active employee:
    name, hire date, years of service, current cycle dates, per kind "left / allotment", Total, next-cycle preview
    ("After 03/08/2027: 3 PTO / 15 Vac"). Red if negative, amber if 1 or fewer. Upcoming: Today / This week / Next week /
@@ -349,10 +354,12 @@ that sets `?g=` and remembers it in the session; editors limited to a group see 
    "Copy last year's events to <next year>". Rows imported onto an odd sheet (the 2023 party/luncheon/sale rows on the
    US Factory Closings sheet; the 2023-24 US office closures on the Manila Factory Closings sheet) are flagged
    "possibly misfiled" with a one-click move to another calendar of the same group.
-8. **History** `history.php` [admin; editors see their own]. Audit log with filters (group, employee, table, user, date),
+8. **History** `history.php` [master admin only; an Admin gets 403 and no nav link]. Audit log with filters (group, employee, table, user, date),
    before/after, and Restore for deleted time-off and event rows.
-9. **Admin** `admin.php` [admin]. Users (add, role, group limit, temporary password, deactivate). Groups: viewer password
-   (set/change; bumps version), `holidays_excluded_from`, viewer heading/title, embed URL. Calendars: the ten rows with
+9. **Admin** `admin.php` [master admin only]. Users (add, role Master admin / Admin, group limit, temporary password,
+   deactivate; the last active master admin cannot be demoted or deactivated). Groups: "Require the office password on
+   the viewer page" checkbox (section 8), viewer password (set/change; bumps version), `holidays_excluded_from`,
+   viewer heading/title, embed URL. Calendars: the ten rows with
    IDs and active/sync toggles (sync buttons are M2). Import (upload the JSON snapshot or CSVs, dry run, commit). Self-test.
    Footer everywhere: app version, engine version, schema version, PHP version.
 10. **Setup** `setup.php?token=` runs once: checks PHP, extensions, `.htaccess`, DB connection; runs `001_init.sql`
@@ -360,6 +367,13 @@ that sets `?g=` and remembers it in the session; editors limited to a group see 
 
 ## 8. Viewer-page authentication (trust cookie)
 
+- **Per-group switch** in `settings`: `viewer_public_<group_key>` = `'1'` means the viewer page is open (no password,
+  no cookie); `'0'` means the office password below is required. Key absent = open (the current default).
+  `viewer_requires_password(array $group): bool` (lib/viewer_auth.php) reads it; `view.php` skips the whole gate when it
+  is false and renders exactly the same page (still no nav, still `noindex`). Admin > Groups writes it through the
+  "Require the office password on the viewer page" checkbox (audited as `setting`); switching it never clears the stored
+  hash, so the gate can be turned back on without a new password. Checked with no password set = the page answers 404
+  until one is set (Admin shows a warning line).
 - One shared password per group in `groups.viewer_password_hash` (`password_hash`, `PASSWORD_DEFAULT`).
 - On success, set cookie `pto_trust_<group_key>` = `base64url(payload) . '.' . hmac` where payload =
   `group_key|password_version|expires_unix` and hmac = `hash_hmac('sha256', payload, config secret)`.
@@ -370,7 +384,7 @@ that sets `?g=` and remembers it in the session; editors limited to a group see 
   password bumps the version and logs everyone out of that page.
 - The password form has no username. Failures sleep 1 second and are written to `audit_log` as `viewer_login_failed`
   with IP. No lockout (a shared 12+ character password on an unlinked URL).
-- Admin/editor sessions do not unlock viewer pages and vice versa (an admin who is not trusted on the device types the
+- Admin sessions do not unlock viewer pages and vice versa (a master admin who is not trusted on the device types the
   viewer password once, like everyone else).
 
 ## 9. Import (`tools/import_sheet.php`, also Admin > Import)

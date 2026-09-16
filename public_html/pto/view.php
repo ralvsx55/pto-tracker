@@ -9,9 +9,11 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
  * right (they stack on narrow screens). Active employees only, server-rendered from the engine for the
  * group's own "today". No nav, no group tabs, no login link; a page never shows the other group.
  *
- * Access: one shared password per group with a 90-day trust cookie (viewer_auth.php). A device without
- * a valid cookie gets a minimal password form; a wrong password sleeps 1 s and is audited with the IP
- * (inside viewer_check_password()). Admin/editor sessions do not unlock this page.
+ * Access: per group either open (settings viewer_public_<key> = '1' or absent: no password, no cookie; the
+ * default for now) or one shared password with a 90-day trust cookie (viewer_auth.php). Admin > Groups holds the
+ * switch. When the password is required, a device without a valid cookie gets a minimal password form; a wrong
+ * password sleeps 1 s and is audited with the IP (inside viewer_check_password()). Admin sessions never unlock
+ * this page. Either way the page itself is rendered exactly the same: no nav, noindex, the group's own today.
  */
 
 header('X-Robots-Tag: noindex');
@@ -61,23 +63,24 @@ $group = is_string($key) && $key !== '' ? group_by_key($key) : null;
 if ($group === null || (int) $group['is_active'] !== 1) {
     view_not_found();
 }
-$hash = $group['viewer_password_hash'] ?? null;
-if (!is_string($hash) || $hash === '') {
-    view_not_found();   // NULL hash = viewer page disabled (SPEC section 6)
-}
-
-// --- password form ----------------------------------------------------------------------------------
-$error = null;
-if (is_post()) {
-    if (viewer_check_password($group, (string) post('password', ''))) {
-        viewer_issue_cookie($group);
-        redirect('view.php?g=' . rawurlencode((string) $group['group_key']));
+// --- password gate (only when Admin > Groups requires it; SPEC section 8) ------------------------------
+if (viewer_requires_password($group)) {
+    $hash = $group['viewer_password_hash'] ?? null;
+    if (!is_string($hash) || $hash === '') {
+        view_not_found();   // password required but none set = viewer page disabled (SPEC section 6)
     }
-    $error = 'Wrong password. Try again.';
-}
-// viewer_trusted() may re-issue the cookie (sliding window), so it runs before any output.
-if (!viewer_trusted($group)) {
-    view_gate($group, $error);
+    $error = null;
+    if (is_post()) {
+        if (viewer_check_password($group, (string) post('password', ''))) {
+            viewer_issue_cookie($group);
+            redirect('view.php?g=' . rawurlencode((string) $group['group_key']));
+        }
+        $error = 'Wrong password. Try again.';
+    }
+    // viewer_trusted() may re-issue the cookie (sliding window), so it runs before any output.
+    if (!viewer_trusted($group)) {
+        view_gate($group, $error);
+    }
 }
 
 // --- the page ---------------------------------------------------------------------------------------

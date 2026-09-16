@@ -3,10 +3,12 @@ declare(strict_types=1);
 require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
 
 /**
- * Admin (SPEC section 7.9). Admin role only. Five tabs:
- *   users      accounts: add with a temporary password (must_change_password), role, group limit, deactivate/reactivate
- *   groups     per group: viewer password (viewer_set_password() bumps the trust-cookie version),
- *              holidays_excluded_from, viewer title/heading, calendar embed URL
+ * Admin (SPEC section 7.9). Master admin role only (users.role 'admin'; an Admin = 'editor' gets a 403). Five tabs:
+ *   users      accounts: add with a temporary password (must_change_password), role (Master admin / Admin), group
+ *              limit, deactivate/reactivate
+ *   groups     per group: the "require the office password" switch (settings viewer_public_<key>, SPEC section 8),
+ *              viewer password (viewer_set_password() bumps the trust-cookie version), holidays_excluded_from,
+ *              viewer title/heading, calendar embed URL
  *   calendars  Google setup status, the global sync_mode switch, the ten calendar rows (Google calendar id, active/sync
  *              toggles) and per calendar the Milestone 2 sync actions (test, preview, sync now, force, adopt, unmanaged /
  *              orphaned events, wipe birthdays), reset sync state, test alert and the sync.log tail (SPEC 14.5)
@@ -39,7 +41,7 @@ function admin_redirect(string $tab, string $extra = ''): never
     redirect('admin.php?tab=' . rawurlencode($tab) . $extra);
 }
 
-/** Every group (active or not) as id => row. Admins see all groups; groups_all() would filter for editors. */
+/** Every group (active or not) as id => row. Master admins see all groups; groups_all() would filter for a limited Admin. */
 function admin_groups(): array
 {
     $out = [];
@@ -56,7 +58,7 @@ function admin_user_image(array $u): array
     return $u;
 }
 
-/** Active admins other than $exceptId (guards against locking everyone out of Admin). */
+/** Active master admins other than $exceptId (guards against locking everyone out of Admin). */
 function admin_other_active_admins(int $exceptId): int
 {
     return (int) col("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1 AND id <> ?", [$exceptId]);
@@ -86,7 +88,7 @@ function admin_stash_take(string $key): ?array
     return is_array($d) ? $d : null;
 }
 
-/** Group limit from the form: '' = all groups; admins always get NULL (they see everything anyway). */
+/** Group limit from the form: '' = all groups; master admins always get NULL (they see everything anyway). */
 function admin_group_limit_from_post(string $role, array $groups): ?int
 {
     $raw = (string) post('group_id', '');
@@ -110,7 +112,7 @@ function admin_validate_user(string $email, string $name, string $role, ?int $ex
         $errors[] = 'Enter a display name (up to 80 characters).';
     }
     if (!in_array($role, ['admin', 'editor'], true)) {
-        $errors[] = 'Role must be admin or editor.';
+        $errors[] = 'Role must be ' . role_label('admin') . ' or ' . role_label('editor') . '.';
     }
     return $errors;
 }
@@ -276,7 +278,7 @@ function admin_post_user_add(): never
         $id = user_create($email, $name, $temp, $role, $groupId, true);
         $after = admin_user_image(row('SELECT * FROM users WHERE id = ?', [$id]) ?? []);
         $limit = $groupId === null ? 'all groups' : $groups[$groupId]['name'];
-        audit('insert', 'users', $id, null, $groupId, null, $after, "$name ($email) added as $role, $limit");
+        audit('insert', 'users', $id, null, $groupId, null, $after, "$name ($email) added as " . role_label($role) . ", $limit");
     });
     flash('ok', "Account for $name created. Temporary password" . ($generated ? ' (generated)' : '') . ": $temp  - they must choose their own at first login.");
     admin_redirect('users');
@@ -298,7 +300,7 @@ function admin_post_user_save(): never
     $temp = (string) post('temp_password', '');
     $errors = admin_validate_user($email, $name, $role, $id);
     if ($u['role'] === 'admin' && $role !== 'admin' && (int) $u['is_active'] === 1 && admin_other_active_admins($id) === 0) {
-        $errors[] = 'This is the only active admin. Make someone else an admin before changing this role.';
+        $errors[] = 'This is the only active master admin. Make someone else a master admin before changing this role.';
     }
     if ($temp !== '' && strlen($temp) < ADMIN_MIN_TEMP_PASSWORD) {
         $errors[] = 'The temporary password needs at least ' . ADMIN_MIN_TEMP_PASSWORD . ' characters.';
@@ -338,7 +340,7 @@ function admin_post_user_active(array $me): never
         admin_redirect('users');
     }
     if ($to === 0 && $u['role'] === 'admin' && (int) $u['is_active'] === 1 && admin_other_active_admins($id) === 0) {
-        flash('err', 'This is the only active admin; it cannot be deactivated.');
+        flash('err', 'This is the only active master admin; it cannot be deactivated.');
         admin_redirect('users');
     }
     if ((int) $u['is_active'] === $to) {
@@ -400,15 +402,37 @@ function admin_post_group_save(): never
             $changed[] = $k;
         }
     }
+    // SPEC section 8: the per-group switch lives in settings (viewer_public_<key>), not in the groups row. The stored
+    // password hash is never touched here, so the gate can be switched off and back on without a new password.
+    $requireWas = viewer_requires_password($g);
+    $requireNow = post('require_viewer_password') === '1';
+    $switch = $requireWas !== $requireNow;
+    if ($switch) {
+        $changed[] = 'viewer_password_required';
+    }
     if ($changed === []) {
         flash('ok', $g['name'] . ': no changes.');
         admin_redirect('groups');
     }
-    tx(static function () use ($id, $g, $data, $before, $changed): void {
-        update_row('groups', $data, 'id = ?', [$id]);
-        audit('setting', 'groups', $id, null, $id, $before, $data, $g['name'] . ': ' . implode(', ', $changed) . ' updated');
+    $beforeImage = $before + ['viewer_password_required' => $requireWas];
+    $afterImage = $data + ['viewer_password_required' => $requireNow];
+    tx(static function () use ($id, $g, $data, $before, $beforeImage, $afterImage, $changed, $switch, $requireNow): void {
+        if ($data !== $before) {
+            update_row('groups', $data, 'id = ?', [$id]);
+        }
+        if ($switch) {
+            viewer_set_public($g, !$requireNow);
+        }
+        audit('setting', 'groups', $id, null, $id, $beforeImage, $afterImage, $g['name'] . ': ' . implode(', ', $changed) . ' updated');
     });
-    flash('ok', $g['name'] . ' settings saved (' . implode(', ', $changed) . ').');
+    $note = '';
+    if ($switch) {
+        $hasPw = is_string($g['viewer_password_hash']) && $g['viewer_password_hash'] !== '';
+        $note = $requireNow
+            ? ($hasPw ? ' The viewer page now asks for the office password.' : ' The viewer page now requires a password, but none is set yet: set one below.')
+            : ' The viewer page is open without a password.';
+    }
+    flash('ok', $g['name'] . ' settings saved (' . implode(', ', $changed) . ').' . $note);
     admin_redirect('groups');
 }
 
@@ -1152,12 +1176,12 @@ function admin_render_user_form(?array $u, array $groups): void
     echo '</div><div class="form-row">';
     $role = $u['role'] ?? 'editor';
     echo '<div><label for="u_role">Role</label><select id="u_role" name="role">';
-    foreach (['editor' => 'Editor (data entry)', 'admin' => 'Admin (everything)'] as $val => $label) {
-        echo '<option value="' . h($val) . '"' . ($role === $val ? ' selected' : '') . '>' . h($label) . '</option>';
+    foreach (['editor', 'admin'] as $val) {
+        echo '<option value="' . h($val) . '"' . ($role === $val ? ' selected' : '') . '>' . h(role_label($val)) . '</option>';
     }
     echo '</select></div>';
     $limit = $u['group_id'] ?? null;
-    echo '<div><label for="u_group">Group limit (editors only)</label><select id="u_group" name="group_id"><option value="">All groups</option>';
+    echo '<div><label for="u_group">Group limit (' . h(role_label('editor')) . ' only)</label><select id="u_group" name="group_id"><option value="">All groups</option>';
     foreach ($groups as $gid => $g) {
         echo '<option value="' . $gid . '"' . ((int) ($limit ?? 0) === $gid ? ' selected' : '') . '>' . h($g['name']) . '</option>';
     }
@@ -1181,7 +1205,9 @@ function admin_render_users(array $me): void
     $edit = $editId > 0 ? row('SELECT * FROM users WHERE id = ?', [$editId]) : null;
     $users = rows('SELECT * FROM users ORDER BY is_active DESC, display_name, id');
 
-    echo '<p class="help">Admins see every group and this page. Editors do data entry; with a group limit they see only that group.</p>';
+    echo '<p class="help">' . h(role_label('admin')) . ': everything, including this page and History. '
+        . h(role_label('editor')) . ': full data entry across the calendars; no Admin or History tabs. A group limit restricts an '
+        . h(role_label('editor')) . ' to that group.</p>';
     echo '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Group limit</th><th>Status</th><th>Last login</th><th></th></tr></thead><tbody>';
     foreach ($users as $u) {
         $id = (int) $u['id'];
@@ -1189,7 +1215,7 @@ function admin_render_users(array $me): void
         $active = (int) $u['is_active'] === 1;
         echo '<tr><td>' . h($u['display_name']) . ($isMe ? ' <span class="badge">you</span>' : '')
             . ((int) $u['must_change_password'] === 1 ? ' <span class="badge badge-warn">must change password</span>' : '') . '</td>';
-        echo '<td>' . h($u['email']) . '</td><td>' . h($u['role']) . '</td>';
+        echo '<td>' . h($u['email']) . '</td><td>' . h(role_label((string) $u['role'])) . '</td>';
         echo '<td>' . ($u['group_id'] === null ? 'All groups' : h($groups[(int) $u['group_id']]['name'] ?? ('#' . (int) $u['group_id']))) . '</td>';
         echo '<td>' . ($active ? '<span class="badge badge-ok">active</span>' : '<span class="badge badge-err">deactivated</span>') . '</td>';
         echo '<td>' . h(fmt_datetime($u['last_login_at'])) . '</td>';
@@ -1224,14 +1250,23 @@ function admin_render_groups(): void
         echo '<label for="' . $p . 'embed">Calendar embed URL (the iframe src on the viewer page)</label>'
             . '<textarea class="embed" id="' . $p . 'embed" name="viewer_embed_src" rows="4" maxlength="4000">' . h($g['viewer_embed_src']) . '</textarea>'
             . '<span class="help">Must start with ' . h(ADMIN_EMBED_PREFIX) . ' (the only frame source the viewer page allows). Blank hides the calendar.</span>';
+        $hasPw = is_string($g['viewer_password_hash']) && $g['viewer_password_hash'] !== '';
+        $requirePw = viewer_requires_password($g);
+        // SPEC section 8: unchecked = open (no password, no cookie); the stored password is kept either way.
+        echo '<label class="check"><input type="checkbox" name="require_viewer_password" value="1"' . ($requirePw ? ' checked' : '') . '> '
+            . 'Require the office password on the viewer page</label>'
+            . '<span class="help">Unchecked: anyone with the link sees the page. Checked: the shared password below and the 90-day trust cookie apply.</span>';
+        if ($requirePw && !$hasPw) {
+            echo '<p class="inline-warn">A password must be set first: until one is set below, the viewer page answers "Not found".</p>';
+        }
         echo '<div class="actions"><button class="btn btn-primary" type="submit">Save settings</button>'
             . '<a class="btn" href="' . h(app_url('view.php?g=' . rawurlencode($g['group_key']))) . '">Open viewer page</a></div></form>';
 
-        $hasPw = is_string($g['viewer_password_hash']) && $g['viewer_password_hash'] !== '';
         echo '<h3>Viewer password</h3>';
         echo '<p class="help">' . ($hasPw
-            ? 'Set (version ' . h((string) $g['viewer_password_version']) . '); the viewer page is enabled.'
-            : 'Not set; the viewer page is disabled until a password is set.')
+            ? 'Set (version ' . h((string) $g['viewer_password_version']) . ').'
+            : 'Not set; with the password required, the viewer page is disabled until one is set.')
+            . ' It applies only while the box above is checked; the stored password is kept when the box is unchecked.'
             . ' Changing it bumps the version, so every device is asked for it again.</p>';
         echo '<form method="post">' . csrf_field() . '<input type="hidden" name="action" value="group_viewer_password"><input type="hidden" name="id" value="' . $id . '">';
         echo '<div class="form-row">';

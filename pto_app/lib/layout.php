@@ -41,9 +41,9 @@ function layout_header(string $title, array $opts = []): void
             'requests.php'  => 'Time off',
             'employees.php' => 'Employees',
             'events.php'    => 'Events',
-            'history.php'   => 'History',
         ];
-        if ($user['role'] === 'admin') {
+        if ($user['role'] === 'admin') {   // master admin only: History and Admin (both pages answer 403 otherwise)
+            $links['history.php'] = 'History';
             $links['admin.php'] = 'Admin';
         }
         $current = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));

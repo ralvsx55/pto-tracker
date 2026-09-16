@@ -4,7 +4,7 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
 
 /**
  * History (SPEC section 7.8): the append-only audit_log with filters (group, employee, table, user, date range).
- * Admins see everything; editors see only their own actions. before_json / after_json are shown as a readable
+ * Master admins only (an Admin gets a 403 and no nav link). before_json / after_json are shown as a readable
  * field-by-field diff. "Restore" re-inserts a deleted time_off or events row from its before_json (same id, the
  * Google-sync columns cleared) and writes a new 'restore' audit row, then marks the row's calendar dirty and runs the
  * inline sync pass (SPEC 14.3).
@@ -12,10 +12,8 @@ require dirname(__DIR__, 2) . '/pto_app/lib/bootstrap.php';
  * Private helpers are prefixed history_ (candidates for lib promotion).
  */
 
-$user = require_login();
-$isAdmin = $user['role'] === 'admin';
-$userId = (int) $user['id'];
-$groups = groups_all();   // id => row; already limited to the editor's group when the account is restricted
+$user = require_role('admin');
+$groups = groups_all();   // id => row (a master admin sees every active group)
 
 const HISTORY_PAGE_SIZE = 100;
 
@@ -119,17 +117,14 @@ function history_row_ref(array $a, bool $exists): string
 
 /**
  * Restore a deleted time_off / events row from the before_json of audit row $auditId.
- * Returns [ok, message]. Editors may only restore their own deletes; the parent rows (employee / calendar) must
- * still exist; the id must be free (the row was not restored already).
+ * Returns [ok, message]. The parent rows (employee / calendar) must still exist; the id must be free (the row was
+ * not restored already).
  */
 function history_restore(int $auditId, array $user): array
 {
     $a = row('SELECT * FROM audit_log WHERE id = ?', [$auditId]);
     if ($a === null || $a['action'] !== 'delete' || !isset(HISTORY_RESTORE_COLUMNS[(string) $a['table_name']])) {
         return [false, 'Only deleted time-off and event rows can be restored.'];
-    }
-    if ($user['role'] !== 'admin' && (int) ($a['user_id'] ?? 0) !== (int) $user['id']) {
-        return [false, 'You can only restore rows you deleted yourself.'];
     }
     $table = (string) $a['table_name'];
     $before = json_decode((string) $a['before_json'], true);
@@ -229,9 +224,7 @@ if ($f['employee'] !== '' && !ctype_digit($f['employee'])) {
 if ($f['table'] !== '' && preg_match('/^[a-z_]{1,30}$/', $f['table']) !== 1) {
     $f['table'] = '';
 }
-if (!$isAdmin) {
-    $f['user'] = '';   // editors see their own actions only (SPEC section 7.8); the user filter is not offered
-} elseif ($f['user'] !== '' && $f['user'] !== 'system' && !ctype_digit($f['user'])) {
+if ($f['user'] !== '' && $f['user'] !== 'system' && !ctype_digit($f['user'])) {
     $f['user'] = '';
 }
 foreach (['from', 'to'] as $k) {
@@ -259,17 +252,9 @@ if (is_post()) {
 
 $where = [];
 $p = [];
-if (!$isAdmin) {
-    $where[] = 'a.user_id = ?';
-    $p[] = $userId;
-}
 if ($f['group'] !== '') {
     $where[] = 'a.group_id = ?';
     $p[] = (int) $f['group'];
-} elseif (!$isAdmin && count($groups) > 0 && $user['group_id'] !== null) {
-    // A group-limited editor never sees another group's rows even if one slipped through under their user id.
-    $where[] = '(a.group_id IS NULL OR a.group_id = ?)';
-    $p[] = (int) $user['group_id'];
 }
 if ($f['employee'] !== '') {
     $where[] = 'a.employee_id = ?';
@@ -343,27 +328,21 @@ $tableOptions = [];
 foreach (rows('SELECT DISTINCT table_name FROM audit_log WHERE table_name IS NOT NULL ORDER BY table_name') as $t) {
     $tableOptions[(string) $t['table_name']] = str_replace('_', ' ', (string) $t['table_name']);
 }
-$userOptions = [];
-if ($isAdmin) {
-    $userOptions['system'] = 'System (import / cron)';
-    foreach (rows('SELECT id, display_name, is_active FROM users ORDER BY display_name') as $u) {
-        $userOptions[(int) $u['id']] = $u['display_name'] . ((int) $u['is_active'] === 1 ? '' : ' (inactive)');
-    }
+$userOptions = ['system' => 'System (import / cron)'];
+foreach (rows('SELECT id, display_name, is_active FROM users ORDER BY display_name') as $u) {
+    $userOptions[(int) $u['id']] = $u['display_name'] . ((int) $u['is_active'] === 1 ? '' : ' (inactive)');
 }
 
 // ------------------------------------------------------------------ page
 
 layout_header('History', ['group_tabs' => false, 'css' => ['assets/events.css']]);
-echo '<div class="toolbar"><h1>History</h1><span class="muted">'
-    . ($isAdmin ? 'Every change, login and import, newest first.' : 'Your own actions, newest first.') . '</span></div>';
+echo '<div class="toolbar"><h1>History</h1><span class="muted">Every change, login and import, newest first.</span></div>';
 
 echo '<div class="card"><form method="get" action="' . h(app_url('history.php')) . '" class="filters">';
 echo '<div><label for="f-group">Group</label><select name="group" id="f-group"><option value="">Any</option>' . history_options($groupOptions, $f['group']) . '</select></div>';
 echo '<div><label for="f-employee">Employee</label><select name="employee" id="f-employee"><option value="">Any</option>' . history_options($empOptions, $f['employee']) . '</select></div>';
 echo '<div><label for="f-table">Table</label><select name="table" id="f-table"><option value="">Any</option>' . history_options($tableOptions, $f['table']) . '</select></div>';
-if ($isAdmin) {
-    echo '<div><label for="f-user">User</label><select name="user" id="f-user"><option value="">Any</option>' . history_options($userOptions, $f['user']) . '</select></div>';
-}
+echo '<div><label for="f-user">User</label><select name="user" id="f-user"><option value="">Any</option>' . history_options($userOptions, $f['user']) . '</select></div>';
 echo '<div><label for="f-from">From</label><input type="date" name="from" id="f-from" value="' . h($f['from']) . '"></div>';
 echo '<div><label for="f-to">To</label><input type="date" name="to" id="f-to" value="' . h($f['to']) . '"></div>';
 echo '<div class="actions"><button class="btn btn-primary" type="submit">Filter</button> <a class="btn" href="' . h(app_url('history.php')) . '">Clear</a></div>';
@@ -382,8 +361,7 @@ foreach ($list as $a) {
     $after = $a['after_json'] === null ? null : json_decode((string) $a['after_json'], true);
     $before = is_array($before) ? $before : null;
     $after = is_array($after) ? $after : null;
-    $restorable = $a['action'] === 'delete' && isset(HISTORY_RESTORE_COLUMNS[(string) $table]) && $before !== null && !$rowExists
-        && ($isAdmin || (int) ($a['user_id'] ?? 0) === $userId);
+    $restorable = $a['action'] === 'delete' && isset(HISTORY_RESTORE_COLUMNS[(string) $table]) && $before !== null && !$rowExists;
 
     echo '<tr>';
     echo '<td class="audit-when" data-v="' . h((string) $a['at']) . '">' . h(fmt_date(substr((string) $a['at'], 0, 10))) . '<br><small class="muted">' . h(substr((string) $a['at'], 11, 5)) . '</small></td>';

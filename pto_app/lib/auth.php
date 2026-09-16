@@ -1,7 +1,12 @@
 <?php
 declare(strict_types=1);
 
-/** Admin/editor accounts (LIB CONTRACT: auth.php). Viewer-page passwords live in viewer_auth.php. */
+/**
+ * Admin accounts (LIB CONTRACT: auth.php). Viewer-page passwords live in viewer_auth.php.
+ * Two levels, stored in users.role: 'admin' = "Master admin" (everything), 'editor' = "Admin" (full data entry
+ * across the calendars, optionally limited to one group; no Admin or History tab). The ENUM values never change;
+ * role_label() is the one place the UI wording lives.
+ */
 
 /** A bcrypt hash of a random string nobody knows; login() verifies against it when the email is unknown. */
 const LOGIN_DUMMY_HASH = '$2y$10$UMp94ICJnkjE9zRyyp8UdeuRvI02l0n.GceEs43rGKfHSg6B3gZmq';
@@ -39,14 +44,24 @@ function require_login(): array
     return $u;
 }
 
-/** Like require_login() but also demands a role ('admin' or 'editor'; admins satisfy 'editor'). */
+/** Like require_login() but also demands a role ('admin' or 'editor'; master admins satisfy 'editor'). */
 function require_role(string $role): array
 {
     $u = require_login();
     if ($role === 'admin' && $u['role'] !== 'admin') {
-        layout_error_page(403, 'Not allowed', 'This page is for administrators.');
+        layout_error_page(403, 'Not allowed', 'This page is for master admins.');
     }
     return $u;
+}
+
+/** The UI label of a users.role value: 'admin' = "Master admin", 'editor' = "Admin". */
+function role_label(string $role): string
+{
+    return match ($role) {
+        'admin'  => 'Master admin',
+        'editor' => 'Admin',
+        default  => ucfirst($role),
+    };
 }
 
 /** Email + password login. Failure: half-second delay, audited. Success: fresh session id, audited. */
@@ -90,7 +105,7 @@ function logout(): void
     session_destroy();
 }
 
-/** Admins see every group; an editor with users.group_id set sees only that group. */
+/** Master admins see every group; an Admin (editor) with users.group_id set sees only that group. */
 function user_can_group(array $user, int $groupId): bool
 {
     if ($user['role'] === 'admin' || $user['group_id'] === null) {

@@ -31,5 +31,9 @@ existing Liquid Web cPanel account.
 3. `run-local.bat` - serves `public_html\pto` on http://127.0.0.1:8020/.
 4. `C:\xampp\php\php.exe pto_app\tests\balance_test.php` - must print one green line before any upload.
 
-Local logins after a reset: admin `chris@lightsaberpromotions.com` / `changeme-now`;
-viewer pages (`view.php?g=us`, `view.php?g=manila`) password `staff`.
+Local logins after a reset: master admin `chris@lightsaberpromotions.com` / `changeme-now`;
+viewer pages (`view.php?g=us`, `view.php?g=manila`) are open by default; when Admin > Groups requires the office
+password it is `staff`.
+
+Two admin levels (`users.role`): `admin` = "Master admin" (everything), `editor` = "Admin" (full data entry across
+the calendars; no Admin or History tabs).

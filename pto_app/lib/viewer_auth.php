@@ -6,10 +6,26 @@ declare(strict_types=1);
  * Cookie pto_trust_<group_key> = base64url(payload) . '.' . hmac
  * payload = group_key|password_version|expires_unix ; hmac = hash_hmac('sha256', payload, config secret)
  * 90-day expiry; re-issued on a visit more than 30 days after issue (sliding window).
+ *
+ * Per-group switch: settings 'viewer_public_<group_key>' = '1' means the viewer page is open (no password, no cookie);
+ * '0' means the office password is required. The key absent = open (the current default). Admin > Groups writes it;
+ * the stored password hash is left alone either way so the gate can be switched back on later.
  */
 
 const VIEWER_TRUST_DAYS = 90;
 const VIEWER_REISSUE_AFTER_DAYS = 30;
+
+/** True when view.php must show the password gate for this group (settings viewer_public_<key> is '0'). */
+function viewer_requires_password(array $group): bool
+{
+    return setting('viewer_public_' . $group['group_key'], '1') === '0';
+}
+
+/** Write the per-group switch (Admin > Groups); '1' = open, '0' = password required. */
+function viewer_set_public(array $group, bool $public): void
+{
+    setting_set('viewer_public_' . $group['group_key'], $public ? '1' : '0');
+}
 
 function viewer_cookie_name(array $group): string
 {
