@@ -146,7 +146,10 @@ function sync_badge(?array $row, bool $showError = false): string
 function layout_schema_warning(): string
 {
     try {
-        if (current_user() === null) {
+        // Master admins only, and only on the admin dashboard: the reminder is for the person who runs migrations,
+        // not for the viewer pages or data-entry screens.
+        $user = current_user();
+        if ($user === null || $user['role'] !== 'admin' || basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')) !== 'dashboard.php') {
             return '';
         }
         $db = setting('schema_version', '?') ?? '?';
