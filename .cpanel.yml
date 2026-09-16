@@ -1,0 +1,11 @@
+---
+# cPanel Git Version Control deployment (Pull or Deploy > Deploy HEAD Commit).
+# Copies only the two runtime folders into the account. pto_data (config, key, logs) and
+# reference/ are never touched. setup.php is copied back on every deploy but refuses to
+# run once an admin user exists.
+deployment:
+  tasks:
+    - /bin/mkdir -p $HOME/public_html/pto $HOME/pto_app
+    - /bin/cp -R public_html/pto/. $HOME/public_html/pto/
+    - /bin/cp -R pto_app/. $HOME/pto_app/
+    - /bin/chmod 755 $HOME/pto_app $HOME/pto_app/cron $HOME/pto_app/tools
