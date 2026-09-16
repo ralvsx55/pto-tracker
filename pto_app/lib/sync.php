@@ -178,6 +178,9 @@ function sync_desired(array $cal): array
             }
             break;
         case 'birthdays':
+            // Make sure this year's and next year's rows exist before building the set, so a first Sync now or
+            // Preview never aborts with "desired set is empty" just because the nightly top-up has not run yet.
+            birthday_rows_topup($groupId);
             // birthday_events rows whose employee is ACTIVE and has a month/day; title "<name> Birthday"
             $sql = 'SELECT b.employee_id, b.year, b.google_event_id, b.synced_fingerprint, b.sync_error, e.name, e.birth_month, e.birth_day
                     FROM birthday_events b JOIN employees e ON e.id = b.employee_id
