@@ -1,7 +1,13 @@
 /* Dashboard (dashboard.php): balances table details and the Upcoming section. Loaded after app.css. */
 
 .dash-meta { color: var(--muted); font-size: .9rem; }
-.balances td.cycle, .balances td.next-note { white-space: nowrap; }
+.balances td.cycle { white-space: nowrap; }
+/* The next-cycle note may wrap onto two lines instead of forcing a horizontal scroll; names stay on one line. */
+.balances td.next-note { white-space: normal; min-width: 9.5rem; }
+.balances td:first-child { white-space: nowrap; }
+.balances th, .balances td { padding-left: .6rem; padding-right: .6rem; }
+/* The dashboard has the widest table in the app, so it gets a wider content column than the other screens. */
+body.dashboard-page .wrap { max-width: 1400px; }
 .balances tr.former td { color: var(--muted); }
 .balances tr.former td a { color: var(--muted); }
 
@@ -33,7 +39,7 @@
 .status-strip.sync-err { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line); }
 
 /* Upcoming cards sit above the balances table and keep one fixed size; overflow goes to the "view more" link. */
-.upcoming { margin-bottom: 1.25rem; }
+.upcoming { margin-bottom: 1.75rem; }
 .upcoming .card { display: flex; flex-direction: column; height: 225px; overflow: hidden; }
 .upcoming .card ul { flex: 1 1 auto; overflow: hidden; }
 .upcoming .more { margin-top: auto; padding-top: .4rem; font-size: .85rem; border-top: 1px solid var(--line); }

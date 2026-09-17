@@ -148,7 +148,7 @@ $g = '?g=' . rawurlencode((string) $group['group_key']);
 $all = sheet_order(group_summaries((int) $group['id'], $today));
 $activeCount = count(array_filter($all, static fn(array $r): bool => $r['employee']['status'] === 'active'));
 
-layout_header('Dashboard', ['css' => ['assets/dashboard.css']]);
+layout_header('Dashboard', ['css' => ['assets/dashboard.css'], 'body_class' => 'dashboard-page']);
 
 echo '<div class="toolbar"><h1>' . h($group['name']) . '</h1>';
 echo '<span class="dash-meta">today ' . h($today->format('m/d/Y')) . ' (' . h($group['timezone']) . ') &middot; '
