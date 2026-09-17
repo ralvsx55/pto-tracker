@@ -109,9 +109,15 @@ function dashboard_when(DateTimeImmutable $start, DateTimeImmutable $end): strin
     return $start->format($fmt) . ' - ' . $end->format($fmt);
 }
 
+const DASHBOARD_BUCKET_MAX = 3;   // items listed per Upcoming card before the "view more" link
+
 /** One Upcoming bucket as a card. */
-function dashboard_bucket(string $title, string $range, array $items): void
+function dashboard_bucket(string $title, string $range, array $items, string $moreHref): void
 {
+    // The cards keep one fixed size (dashboard.css); only the first DASHBOARD_BUCKET_MAX items are listed and the
+    // rest are reached through a link to the group's live calendar page.
+    $extra = max(0, count($items) - DASHBOARD_BUCKET_MAX);
+    $items = array_slice($items, 0, DASHBOARD_BUCKET_MAX);
     echo '<div class="card"><h3>' . h($title) . '<span class="range">' . h($range) . '</span></h3>';
     if ($items === []) {
         echo '<p class="empty">Nothing scheduled.</p></div>';
@@ -124,7 +130,11 @@ function dashboard_bucket(string $title, string $range, array $items): void
         $what = '<span class="what">' . h($it['what']) . '</span>';
         echo '<li class="up-' . h($it['type']) . '">' . $when . $who . ' ' . $what . '</li>';
     }
-    echo '</ul></div>';
+    echo '</ul>';
+    if ($extra > 0) {
+        echo '<a class="more" target="_blank" rel="noopener" href="' . h($moreHref) . '">View ' . $extra . ' more on the calendar &#8599;</a>';
+    }
+    echo '</div>';
 }
 
 // --- page --------------------------------------------------------------------------------------------
@@ -186,6 +196,20 @@ if ($user['role'] === 'admin' && $syncState !== 'not_configured') {
 }
 echo '</div>';
 
+// --- upcoming ---------------------------------------------------------------------------------------
+$up = dashboard_upcoming($group, $today);
+$b = $up['buckets'];
+$moreHref = app_url('view.php') . '?g=' . rawurlencode((string) $group['group_key']);
+echo '<h2>Upcoming</h2><div class="upcoming">';
+dashboard_bucket('Today', $today->format('D m/d'), $b['today'], $moreHref);
+dashboard_bucket('This week', 'through ' . $up['week_end']->format('D m/d'), $b['week'], $moreHref);
+dashboard_bucket('Next week', $up['week_end']->modify('+1 day')->format('m/d') . ' - ' . $up['next_week_end']->format('m/d'), $b['next'], $moreHref);
+$laterFrom = $up['next_week_end']->modify('+1 day');
+dashboard_bucket('Later this month', $laterFrom <= $up['month_end']
+    ? $laterFrom->format('m/d') . ' - ' . $up['month_end']->format('m/d')
+    : 'nothing left of ' . $today->format('F'), $b['month'], $moreHref);
+echo '</div>';
+
 // --- balances table --------------------------------------------------------------------------------
 // Sortable (app.js): dates carry data-v Y-m-d, "left / allot." cells carry the "left" value in data-v.
 echo '<div class="table-wrap"><table class="balances sortable"><thead><tr><th data-sort="text">Employee</th><th data-sort="date">Hire date</th><th class="num" data-sort="num">Years</th><th>Current cycle</th>';
@@ -233,18 +257,5 @@ echo '<p class="help">' . ($showFormer
     : '<a href="' . h(app_url('dashboard.php') . $g . '&former=1') . '">Show former employees</a>')
     . ' &middot; "left / allot." is this cycle\'s remaining days over its allotment (adjustments included).'
     . ' Red: negative. Amber: 1 or fewer.</p>';
-
-// --- upcoming ---------------------------------------------------------------------------------------
-$up = dashboard_upcoming($group, $today);
-$b = $up['buckets'];
-echo '<h2>Upcoming</h2><div class="upcoming">';
-dashboard_bucket('Today', $today->format('D m/d'), $b['today']);
-dashboard_bucket('This week', 'through ' . $up['week_end']->format('D m/d'), $b['week']);
-dashboard_bucket('Next week', $up['week_end']->modify('+1 day')->format('m/d') . ' - ' . $up['next_week_end']->format('m/d'), $b['next']);
-$laterFrom = $up['next_week_end']->modify('+1 day');
-dashboard_bucket('Later this month', $laterFrom <= $up['month_end']
-    ? $laterFrom->format('m/d') . ' - ' . $up['month_end']->format('m/d')
-    : 'nothing left of ' . $today->format('F'), $b['month']);
-echo '</div>';
 
 layout_footer();

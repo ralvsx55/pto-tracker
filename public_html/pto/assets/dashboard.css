@@ -31,3 +31,9 @@
 .status-strip.sync-ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-line); }
 .status-strip.sync-warn { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-line); }
 .status-strip.sync-err { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-line); }
+
+/* Upcoming cards sit above the balances table and keep one fixed size; overflow goes to the "view more" link. */
+.upcoming { margin-bottom: 1.25rem; }
+.upcoming .card { display: flex; flex-direction: column; height: 225px; overflow: hidden; }
+.upcoming .card ul { flex: 1 1 auto; overflow: hidden; }
+.upcoming .more { margin-top: auto; padding-top: .4rem; font-size: .85rem; border-top: 1px solid var(--line); }
