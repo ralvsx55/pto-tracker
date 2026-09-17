@@ -6,8 +6,6 @@
 .balances td.next-note { white-space: normal; min-width: 9.5rem; }
 .balances td:first-child { white-space: nowrap; }
 .balances th, .balances td { padding-left: .6rem; padding-right: .6rem; }
-/* The dashboard has the widest table in the app, so it gets a wider content column than the other screens. */
-body.dashboard-page .wrap { max-width: 1400px; }
 .balances tr.former td { color: var(--muted); }
 .balances tr.former td a { color: var(--muted); }
 

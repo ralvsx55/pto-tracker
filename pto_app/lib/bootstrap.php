@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 define('PTO_APP', dirname(__DIR__));
 define('PTO_DATA', dirname(__DIR__, 2) . '/pto_data');
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 // The settings.schema_version the code expects = the number of the newest file in pto_app/migrations/. When the
 // database is behind, every logged-in page's footer says so until the missing migrations are pasted into phpMyAdmin.
 const SCHEMA_VERSION = '2';
